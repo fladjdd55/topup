@@ -1,11 +1,11 @@
 import dotenv from 'dotenv';
-import { startTelegramBot } from './telegramBot';
 // Force override environment variables from .env file
 dotenv.config({ override: true });
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { wsManager } from "./websocket";
+import { startTelegramBot } from './telegramBot';
 
 const app = express();
 

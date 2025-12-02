@@ -1,20 +1,23 @@
-import { Telegraf, Markup } from 'telegraf';
+import { Telegraf, Markup, Context } from 'telegraf';
+import { Update } from 'telegraf/typings/core/types/typegram';
 import { storage } from './storage';
 import { wsManager } from './websocket';
 import { sendRecharge } from './dingconnect';
 
-// ✅ Correct Imports from your new folders
+// ✅ Import modular files
 import { botConfig } from './config/bot.config';
 import { BotContext } from './types/telegram.types';
 import { validatePhoneNumber, sanitizeInput, validateAmount } from './utils/validators';
-import { middleware } from './middleware/telegramMiddleware'; // Ensure this file exists in server/middleware/
+import { middleware, getHealthStatus } from './middleware/telegramMiddleware';
 
 // Initialize
 const bot = new Telegraf<BotContext>(botConfig.token);
 
-// ✅ Apply Middleware
+// ✅ APPLY MIDDLEWARE
 bot.use(middleware.session);
 bot.use(middleware.floodProtection);
+bot.use(middleware.session);
+bot.use(middleware.analytics);
 
 // ============================================================================
 // HELPER: NOTIFICATION
@@ -35,7 +38,6 @@ export async function createTelegramInvoiceLink(transaction: any) {
     throw new Error("Missing TELEGRAM_PAYMENT_PROVIDER_TOKEN");
   }
 
-  // Amount must be in cents/smallest unit
   const amountInCents = Math.floor(parseFloat(transaction.totalReceivedUsd) * 100);
 
   return await bot.telegram.createInvoiceLink({
@@ -45,7 +47,6 @@ export async function createTelegramInvoiceLink(transaction: any) {
     provider_token: botConfig.paymentProviderToken,
     currency: 'USD',
     prices: [{ label: 'Mobile Credit', amount: amountInCents }],
-    // Use a reliable static image or remove photo_url if causing issues
     photo_url: 'https://cdn-icons-png.flaticon.com/512/3062/3062634.png',
     need_name: false,
     need_phone_number: false,
@@ -55,7 +56,7 @@ export async function createTelegramInvoiceLink(transaction: any) {
 }
 
 // ============================================================================
-// COMMANDS
+// PUBLIC COMMANDS
 // ============================================================================
 
 bot.command('start', async (ctx) => {
@@ -68,6 +69,17 @@ bot.command('start', async (ctx) => {
         Markup.button.webApp('📱 Open App', botConfig.appUrl)
       ]).resize()
     }
+  );
+});
+
+bot.command('help', async (ctx) => {
+  await ctx.reply(
+    `📱 *Help Center*\n\n` +
+    `/start - Main Menu\n` +
+    `/history - Recent Transactions\n` +
+    `/status <ref> - Check Transaction\n\n` +
+    `*Support:* Contact @YourSupportHandle`,
+    { parse_mode: 'Markdown' }
   );
 });
 
@@ -94,7 +106,106 @@ bot.command('history', async (ctx) => {
 });
 
 // ============================================================================
-// ✅ INLINE QUERY HANDLER (FIXED)
+// 🔒 ADMIN COMMANDS (Protected)
+// ============================================================================
+
+// Middleware to check admin status
+const adminOnly = async (ctx: BotContext, next: () => Promise<void>) => {
+  if (!botConfig.adminIds.includes(ctx.from?.id || 0)) {
+    return; // Silently ignore non-admins
+  }
+  return next();
+};
+
+bot.command('admin', adminOnly, async (ctx) => {
+  await ctx.reply(
+    `🛡️ *Admin Control Panel*\n\n` +
+    `/admin_stats - View Revenue & Health\n` +
+    `/admin_broadcast <msg> - Message all users\n` +
+    `/admin_refund <tx_id> - Refund & Notify User\n` +
+    `/admin_lookup <phone> - Find User`,
+    { parse_mode: 'Markdown' }
+  );
+});
+
+bot.command('admin_stats', adminOnly, async (ctx) => {
+  try {
+    const dbStats = await storage.getAdminStats();
+    const health = getHealthStatus(); // From middleware
+
+    const msg = `
+📊 *Live Statistics*
+
+👥 *Users:* ${dbStats.totalUsers}
+💰 *Revenue:* ${dbStats.totalRevenue}
+✅ *Success Rate:* ${dbStats.successRate}%
+transactions: ${dbStats.totalTransactions}
+
+🖥️ *System Health*
+Status: ${health.status === 'healthy' ? '🟢 OK' : '🔴 Issues'}
+Uptime: ${Math.floor(health.uptime / 60)} mins
+Active Sessions: ${health.activeSessions}
+Errors (5m): ${health.recentErrors}
+    `;
+    await ctx.reply(msg, { parse_mode: 'Markdown' });
+  } catch (e: any) {
+    ctx.reply(`Error: ${e.message}`);
+  }
+});
+
+bot.command('admin_broadcast', adminOnly, async (ctx) => {
+  const message = ctx.message.text.split(' ').slice(1).join(' ');
+  if (!message) return ctx.reply('Usage: /admin_broadcast <message>');
+
+  ctx.reply('📢 Starting broadcast...');
+  
+  const users = await storage.getAllUsers();
+  let sent = 0;
+  let failed = 0;
+
+  for (const user of users) {
+    if (user.telegramId) {
+      try {
+        await bot.telegram.sendMessage(user.telegramId, `📢 *Announcement*\n\n${message}`, { parse_mode: 'Markdown' });
+        sent++;
+        // Small delay to avoid hitting Telegram limits
+        await new Promise(r => setTimeout(r, 50)); 
+      } catch (e) {
+        failed++;
+      }
+    }
+  }
+
+  ctx.reply(`✅ Broadcast complete.\nSent: ${sent}\nFailed/Blocked: ${failed}`);
+});
+
+bot.command('admin_refund', adminOnly, async (ctx) => {
+  const txId = ctx.message.text.split(' ')[1];
+  if (!txId) return ctx.reply('Usage: /admin_refund <transaction_id>');
+
+  try {
+    const tx = await storage.getTransactionByTransactionId(txId);
+    if (!tx) return ctx.reply('❌ Transaction not found.');
+
+    await storage.updateTransaction(tx.id, { status: 'refunded' });
+
+    // Notify User
+    if (tx.telegramId) {
+      await bot.telegram.sendMessage(
+        tx.telegramId, 
+        `↩️ *Refund Processed*\n\nYour transaction \`${txId}\` has been refunded.`,
+        { parse_mode: 'Markdown' }
+      );
+    }
+
+    ctx.reply(`✅ Transaction ${txId} marked as refunded.`);
+  } catch (e: any) {
+    ctx.reply(`Error: ${e.message}`);
+  }
+});
+
+// ============================================================================
+// INLINE QUERY HANDLER
 // ============================================================================
 
 bot.on('inline_query', async (ctx) => {
@@ -102,37 +213,29 @@ bot.on('inline_query', async (ctx) => {
   const results = [];
   const appUrl = botConfig.appUrl;
 
-  // 1. "Open App" Button (Always visible)
+  // 1. App Link
   results.push({
     type: 'article',
     id: 'app_link',
     title: '📱 Open Recharge App',
     description: 'Click here to send a top-up',
     thumb_url: 'https://cdn-icons-png.flaticon.com/512/3062/3062634.png',
-    input_message_content: {
-      message_text: `🚀 I'm sending a mobile top-up with TapTopLoad!`
-    },
-    reply_markup: {
-      inline_keyboard: [[{ text: "📱 Open App", web_app: { url: appUrl } }]]
-    }
+    input_message_content: { message_text: `🚀 I'm using TapTopLoad!` },
+    reply_markup: { inline_keyboard: [[{ text: "📱 Open App", web_app: { url: appUrl } }]] }
   });
 
-  // 2. "Share" Button
+  // 2. Share Link
   results.push({
     type: 'article',
     id: 'share_link',
     title: '🔗 Share with Friends',
     description: 'Send TapTopLoad to a friend',
     thumb_url: 'https://cdn-icons-png.flaticon.com/512/1384/1384060.png',
-    input_message_content: {
-      message_text: `Hey! Check out TapTopLoad for instant mobile recharges! ⚡`
-    },
-    reply_markup: {
-      inline_keyboard: [[{ text: "⚡ Try It Now", url: `https://t.me/${ctx.botInfo.username}` }]]
-    }
+    input_message_content: { message_text: `Hey! Check out TapTopLoad! ⚡` },
+    reply_markup: { inline_keyboard: [[{ text: "⚡ Try It Now", url: `https://t.me/${ctx.botInfo.username}` }]] }
   });
 
-  // 3. Dynamic Number Logic (If user types a phone number)
+  // 3. Dynamic Payment
   const phoneCheck = validatePhoneNumber(query);
   if (phoneCheck.valid && phoneCheck.sanitized) {
     results.unshift({
@@ -141,18 +244,13 @@ bot.on('inline_query', async (ctx) => {
       title: `⚡ Top up ${phoneCheck.sanitized}`,
       description: 'Click to pay instantly',
       thumb_url: 'https://cdn-icons-png.flaticon.com/512/2983/2983797.png',
-      input_message_content: {
-        message_text: `I am recharging ${phoneCheck.sanitized} 📱`
-      },
-      reply_markup: {
-        inline_keyboard: [[
-          { text: `💰 Pay Now`, web_app: { url: `${appUrl}/dashboard/recharge?phone=${encodeURIComponent(phoneCheck.sanitized)}` } }
-        ]]
-      }
+      input_message_content: { message_text: `Recharging ${phoneCheck.sanitized} 📱` },
+      reply_markup: { inline_keyboard: [[
+        { text: `💰 Pay Now`, web_app: { url: `${appUrl}/dashboard/recharge?phone=${encodeURIComponent(phoneCheck.sanitized)}` } }
+      ]] }
     });
   }
 
-  // Answer the query (cache for 10 seconds)
   await ctx.answerInlineQuery(results as any, { cache_time: 10, is_personal: true });
 });
 
@@ -178,8 +276,6 @@ bot.on('successful_payment', async (ctx) => {
   
   try {
     const tx = await storage.getTransactionByTransactionId(txId);
-    
-    // Duplicate Check
     if (!tx || tx.status === 'completed') return;
 
     await storage.updateTransaction(tx.id, {
@@ -188,7 +284,6 @@ bot.on('successful_payment', async (ctx) => {
     });
 
     const amountUSD = parseFloat(tx.amountUsd || '0');
-    // Validate amount again before sending
     if (!validateAmount(amountUSD).valid) throw new Error("Invalid Amount");
 
     const dingResult = await sendRecharge(tx.phoneNumber, amountUSD, tx.transactionId, 'HT');
@@ -224,7 +319,7 @@ bot.on('successful_payment', async (ctx) => {
 export function startTelegramBot() {
   if (!botConfig.token) return console.error('BOT_TOKEN missing');
   
-  bot.launch().then(() => console.log('🤖 Bot started (Production Mode)'));
+  bot.launch().then(() => console.log('🤖 Bot started (Production + Admin Mode)'));
   
   process.once('SIGINT', () => bot.stop('SIGINT'));
   process.once('SIGTERM', () => bot.stop('SIGTERM'));
