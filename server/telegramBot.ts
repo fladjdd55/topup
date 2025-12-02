@@ -78,7 +78,7 @@ bot.command('help', async (ctx) => {
     `/start - Main Menu\n` +
     `/history - Recent Transactions\n` +
     `/status <ref> - Check Transaction\n\n` +
-    `*Support:* Contact @YourSupportHandle`,
+    `*Support:* Contact @taptopload`,
     { parse_mode: 'Markdown' }
   );
 });

@@ -1,14 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Zap, Plus, Smartphone, ArrowDownLeft, ArrowUpRight, User, Copy, Check, Link, Gift } from "lucide-react";
+import { Zap, Plus, Smartphone, ArrowDownLeft, ArrowUpRight, User, Copy, Link, Gift } from "lucide-react";
 import { useLocation } from "wouter";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
@@ -24,9 +24,8 @@ export default function TelegramDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [isAskModalOpen, setIsAskModalOpen] = useState(false);
-  const { t } = useLanguage(); // Defaults to English via Context if set
+  const { t } = useLanguage(); 
 
-  // Force English locale for dates in this view if preferred
   const dateLocale = enUS;
 
   // --- Requests Logic ---
@@ -47,6 +46,13 @@ export default function TelegramDashboard() {
     receiverPhone: '',
   });
 
+  // ✅ Ref to keep track of latest state for the Telegram Button callback
+  const requestStateRef = useRef(newRequest);
+  
+  useEffect(() => {
+    requestStateRef.current = newRequest;
+  }, [newRequest]);
+
   const createRequestMutation = useMutation({
     mutationFn: async (data: typeof newRequest) => {
       let formattedReceiver = data.receiverPhone.trim();
@@ -61,28 +67,65 @@ export default function TelegramDashboard() {
       });
     },
     onSuccess: () => {
-      toast({ title: 'Request sent!' });
+      toast({ title: t('toast.request_sent') });
       setIsAskModalOpen(false);
       setNewRequest({ phoneNumber: user?.phone || '', amount: '', message: '', receiverPhone: '' });
       queryClient.invalidateQueries({ queryKey: ['/api/recharge-requests/sent'] });
+      
+      // Hide button on success
+      const tg = (window as any).Telegram?.WebApp;
+      if (tg) tg.MainButton.hide();
     },
     onError: (error: Error) => {
-      toast({ variant: 'destructive', title: 'Error', description: error.message });
+      toast({ variant: 'destructive', title: t('toast.error'), description: error.message });
+      // Re-enable button on error
+      const tg = (window as any).Telegram?.WebApp;
+      if (tg) tg.MainButton.showProgress(false);
     },
   });
 
   const handleCreateRequest = () => {
-    if (!newRequest.amount || !newRequest.receiverPhone) {
-      toast({ variant: 'destructive', title: 'Error', description: 'Please fill in required fields' });
+    const currentData = requestStateRef.current;
+
+    if (createRequestMutation.isPending) return;
+
+    if (!currentData.amount || !currentData.receiverPhone) {
+      toast({ variant: 'destructive', title: t('toast.error'), description: t('payment.form_validation_error') });
       return;
     }
-    createRequestMutation.mutate(newRequest);
+    
+    const tg = (window as any).Telegram?.WebApp;
+    if (tg) tg.MainButton.showProgress(true);
+    
+    createRequestMutation.mutate(currentData);
   };
+
+  // ✅ TELEGRAM MAIN BUTTON INTEGRATION
+  useEffect(() => {
+    const tg = (window as any).Telegram?.WebApp;
+    if (!tg) return;
+
+    const mainButton = tg.MainButton;
+
+    if (isAskModalOpen) {
+      mainButton.setText(t('requests.send_request').toUpperCase());
+      mainButton.show();
+      mainButton.onClick(handleCreateRequest);
+    } else {
+      mainButton.hide();
+      mainButton.offClick(handleCreateRequest);
+    }
+
+    return () => {
+      mainButton.offClick(handleCreateRequest);
+      mainButton.hide();
+    };
+  }, [isAskModalOpen, t]); // Depend only on modal state and translation
 
   const copyLink = async (code: string) => {
     const url = `${window.location.origin}/request/${code}`;
     await navigator.clipboard.writeText(url);
-    toast({ title: 'Link copied' });
+    toast({ title: t('toast.copied') });
   };
 
   const getStatusColor = (status: string) => {
@@ -95,14 +138,7 @@ export default function TelegramDashboard() {
   };
 
   const getStatusLabel = (status: string) => {
-    // Manual English map if translation fails
-    const map: Record<string, string> = {
-        pending: 'Pending',
-        completed: 'Completed',
-        declined: 'Declined',
-        cancelled: 'Cancelled'
-    };
-    return map[status] || status;
+    return t(`status.${status}`) || status;
   };
 
   return (
@@ -111,7 +147,7 @@ export default function TelegramDashboard() {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm text-muted-foreground">Hello,</p>
+            <p className="text-sm text-muted-foreground">{t('nav.hello')},</p>
             <h1 className="text-xl font-bold">{user?.firstName || 'User'} 👋</h1>
           </div>
           <div 
@@ -124,7 +160,7 @@ export default function TelegramDashboard() {
 
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#24A1DE] to-[#208bbf] p-5 text-white shadow-lg">
           <div className="relative z-10">
-            <p className="text-blue-100 text-xs font-medium mb-1">Available Balance</p>
+            <p className="text-blue-100 text-xs font-medium mb-1">{t('overview.total_amount')}</p>
             <h2 className="text-3xl font-bold mb-4">$0.00 <span className="text-sm opacity-80">USD</span></h2>
             
             <div className="flex gap-2">
@@ -133,14 +169,14 @@ export default function TelegramDashboard() {
                 className="bg-white/20 hover:bg-white/30 text-white border-0 backdrop-blur-sm h-8 text-xs px-3"
                 onClick={() => setLocation("/dashboard/recharge")}
               >
-                <Plus className="mr-1 h-3 w-3" /> Add Funds
+                <Plus className="mr-1 h-3 w-3" /> {t('favorites.add')}
               </Button>
               <Button 
                 size="sm" 
                 className="bg-white text-[#24A1DE] hover:bg-gray-50 border-0 h-8 text-xs px-3"
                 onClick={() => setLocation("/dashboard/recharge")}
               >
-                <Zap className="mr-1 h-3 w-3 fill-current" /> Top-up
+                <Zap className="mr-1 h-3 w-3 fill-current" /> {t('dashboard.recharge')}
               </Button>
             </div>
           </div>
@@ -150,7 +186,7 @@ export default function TelegramDashboard() {
 
       {/* 2. Services (Quick Actions) */}
       <div>
-        <h3 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Services</h3>
+        <h3 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">{t('footer.services')}</h3>
         <div className="grid grid-cols-3 gap-3">
           
           {/* Recharge Mobile */}
@@ -162,11 +198,11 @@ export default function TelegramDashboard() {
               <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
                 <Smartphone className="h-4 w-4" />
               </div>
-              <span className="font-medium text-[10px] leading-tight">Mobile Top-up</span>
+              <span className="font-medium text-[10px] leading-tight">{t('dashboard.mobile_recharge')}</span>
             </CardContent>
           </Card>
 
-          {/* Ask a Friend */}
+          {/* Ask a Friend Modal Trigger */}
           <Dialog open={isAskModalOpen} onOpenChange={setIsAskModalOpen}>
             <DialogTrigger asChild>
               <Card className="border-0 shadow-sm active:scale-95 transition-transform cursor-pointer bg-card">
@@ -174,18 +210,18 @@ export default function TelegramDashboard() {
                   <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
                     <User className="h-4 w-4" />
                   </div>
-                  <span className="font-medium text-[10px] leading-tight">Ask a Friend</span>
+                  <span className="font-medium text-[10px] leading-tight">{t('requests.new_request')}</span>
                 </CardContent>
               </Card>
             </DialogTrigger>
             <DialogContent className="sm:max-w-md top-[20%] translate-y-0">
                <DialogHeader>
-                <DialogTitle>New Request</DialogTitle>
-                <DialogDescription>Ask a friend to top up your number.</DialogDescription>
+                <DialogTitle>{t('requests.new_request')}</DialogTitle>
+                <DialogDescription>{t('requests.new_request_desc')}</DialogDescription>
               </DialogHeader>
               <div className="space-y-3 py-2">
                 <div className="space-y-1">
-                  <Label>Your Number</Label>
+                  <Label>{t('recharge.phone_number_label')} (Vous)</Label>
                   <Input 
                     value={newRequest.phoneNumber} 
                     onChange={e => setNewRequest({...newRequest, phoneNumber: e.target.value})}
@@ -193,7 +229,7 @@ export default function TelegramDashboard() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label>Friend's Number</Label>
+                  <Label>{t('requests.to')}</Label>
                   <Input 
                     value={newRequest.receiverPhone} 
                     onChange={e => setNewRequest({...newRequest, receiverPhone: e.target.value})}
@@ -201,7 +237,7 @@ export default function TelegramDashboard() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label>Amount (USD)</Label>
+                  <Label>{t('recharge.amount_label')}</Label>
                   <Input 
                     type="number" 
                     value={newRequest.amount} 
@@ -210,7 +246,7 @@ export default function TelegramDashboard() {
                   />
                 </div>
                 <div className="space-y-1">
-                  <Label>Message (Optional)</Label>
+                  <Label>{t('requests.message_label')}</Label>
                   <Input 
                     value={newRequest.message} 
                     onChange={e => setNewRequest({...newRequest, message: e.target.value})}
@@ -218,11 +254,7 @@ export default function TelegramDashboard() {
                   />
                 </div>
               </div>
-              <DialogFooter>
-                <Button onClick={handleCreateRequest} disabled={createRequestMutation.isPending} className="w-full">
-                  {createRequestMutation.isPending ? 'Sending...' : 'Send Request'}
-                </Button>
-              </DialogFooter>
+              {/* ✅ BUTTON HIDDEN: Use Telegram Main Button instead */}
             </DialogContent>
           </Dialog>
 
@@ -235,7 +267,7 @@ export default function TelegramDashboard() {
               <div className="h-8 w-8 rounded-full bg-pink-100 flex items-center justify-center text-pink-600">
                 <Gift className="h-4 w-4" />
               </div>
-              <span className="font-medium text-[10px] leading-tight">Send Gift</span>
+              <span className="font-medium text-[10px] leading-tight">{t('hero.gift_recharge')}</span>
             </CardContent>
           </Card>
 
@@ -244,12 +276,12 @@ export default function TelegramDashboard() {
 
       {/* 3. Requests Tabs */}
       <div>
-        <h3 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">Requests</h3>
+        <h3 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">{t('dashboard.requests')}</h3>
         
         <Tabs defaultValue="received" className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-4 h-9">
-            <TabsTrigger value="received" className="text-xs">Received {receivedRequests?.filter(r => r.status === 'pending').length ? `(${receivedRequests.filter(r => r.status === 'pending').length})` : ''}</TabsTrigger>
-            <TabsTrigger value="sent" className="text-xs">Sent</TabsTrigger>
+            <TabsTrigger value="received" className="text-xs">{t('requests.received')} {receivedRequests?.filter(r => r.status === 'pending').length ? `(${receivedRequests.filter(r => r.status === 'pending').length})` : ''}</TabsTrigger>
+            <TabsTrigger value="sent" className="text-xs">{t('requests.sent')}</TabsTrigger>
           </TabsList>
 
           {/* RECEIVED */}
@@ -258,7 +290,7 @@ export default function TelegramDashboard() {
               <Skeleton className="h-20 w-full rounded-xl" />
             ) : receivedRequests?.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground text-xs bg-muted/30 rounded-xl">
-                No requests received
+                {t('requests.no_received')}
               </div>
             ) : (
               receivedRequests?.map((req) => (
@@ -270,7 +302,7 @@ export default function TelegramDashboard() {
                           <ArrowDownLeft className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium">{req.senderName || 'Friend'}</p>
+                          <p className="text-sm font-medium">{req.senderName || 'Ami'}</p>
                           <p className="text-[10px] text-muted-foreground">
                             {req.createdAt ? formatDistanceToNow(new Date(req.createdAt), { addSuffix: true, locale: dateLocale }) : ''}
                           </p>
@@ -293,7 +325,7 @@ export default function TelegramDashboard() {
                           className="flex-1 h-8 text-xs"
                           onClick={() => setLocation(`/request/${req.requestCode}`)}
                         >
-                          Pay Now
+                          {t('requests.pay_now')}
                         </Button>
                         <Button 
                           variant="outline" 
@@ -317,8 +349,8 @@ export default function TelegramDashboard() {
               <Skeleton className="h-20 w-full rounded-xl" />
             ) : sentRequests?.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground text-xs bg-muted/30 rounded-xl">
-                No requests sent. <br/>
-                <span className="text-primary cursor-pointer" onClick={() => setIsAskModalOpen(true)}>Ask a friend?</span>
+                {t('requests.no_sent')} <br/>
+                <span className="text-primary cursor-pointer" onClick={() => setIsAskModalOpen(true)}>{t('requests.new_request')} ?</span>
               </div>
             ) : (
               sentRequests?.map((req) => (
@@ -330,7 +362,7 @@ export default function TelegramDashboard() {
                           <ArrowUpRight className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium">Request Sent</p>
+                          <p className="text-sm font-medium">{t('requests.sent_label')}</p>
                           <p className="text-[10px] text-muted-foreground">
                             {req.createdAt ? formatDistanceToNow(new Date(req.createdAt), { addSuffix: true, locale: dateLocale }) : ''}
                           </p>
@@ -353,7 +385,7 @@ export default function TelegramDashboard() {
                         className="flex-1 h-8 text-xs"
                         onClick={() => copyLink(req.requestCode || '')}
                       >
-                        <Link className="mr-1 h-3 w-3" /> Copy Link
+                        <Link className="mr-1 h-3 w-3" /> {t('requests.copy_link')}
                       </Button>
                       <Button 
                         variant="outline" 
@@ -361,7 +393,7 @@ export default function TelegramDashboard() {
                         className="flex-1 h-8 text-xs"
                         onClick={() => copyLink(req.requestCode || '')}
                       >
-                        <Copy className="mr-1 h-3 w-3" /> Copy Code
+                        <Copy className="mr-1 h-3 w-3" /> {t('requests.copy_code')}
                       </Button>
                     </div>
                   </CardContent>

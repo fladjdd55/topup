@@ -8,58 +8,75 @@ export default function BottomNav() {
   const [isVisible, setIsVisible] = useState(true);
 
   useEffect(() => {
-    // 1. Store the initial "tall" height of the window (no keyboard)
-    const initialHeight = window.innerHeight;
+    // Function to handle viewport changes
+    const handleViewportChange = () => {
+      if (!window.visualViewport) return;
 
-    const handleResize = () => {
-      const currentHeight = window.innerHeight;
-      
-      // 2. Aggressive Check: If the visible height shrinks by more than 20%, 
-      // it is almost certainly the keyboard.
-      if (currentHeight < initialHeight * 0.80) {
-        setIsVisible(false); // Hide Nav
+      const currentHeight = window.visualViewport.height;
+      const screenHeight = window.innerHeight;
+
+      // Logic: If the visual viewport is significantly smaller than the window inner height
+      // (e.g., < 80%), it means something (like a keyboard) is displacing content.
+      // We hide the nav in this case.
+      if (currentHeight < screenHeight * 0.85) {
+        setIsVisible(false);
       } else {
-        setIsVisible(true);  // Show Nav
+        setIsVisible(true);
       }
     };
 
-    // 3. Listen for resize (Android keyboard triggers this)
-    window.addEventListener('resize', handleResize);
-    
-    // 4. Also listen for focus events as a backup
+    // Attach listeners if the API is supported
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportChange);
+      window.visualViewport.addEventListener('scroll', handleViewportChange);
+      
+      // Initial check
+      handleViewportChange();
+    }
+
+    // Fallback for older browsers or focus events
     const handleFocus = (e: FocusEvent) => {
-       const target = e.target as HTMLElement;
-       if (['INPUT', 'TEXTAREA'].includes(target.tagName)) {
-         setIsVisible(false);
-       }
+      const target = e.target as HTMLElement;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) {
+        setIsVisible(false);
+      }
     };
+
     const handleBlur = () => {
-       // Delay showing to prevent flicker if moving between fields
-       setTimeout(() => {
-         if (window.innerHeight >= initialHeight * 0.80) {
-            setIsVisible(true);
-         }
-       }, 200);
+      // Delay allows for focus switching between inputs without flashing the nav
+      setTimeout(() => {
+        // Double check with visual viewport if available
+        if (window.visualViewport) {
+             if (window.visualViewport.height >= window.innerHeight * 0.85) {
+                 setIsVisible(true);
+             }
+        } else {
+             setIsVisible(true);
+        }
+      }, 200);
     };
 
     window.addEventListener('focusin', handleFocus);
     window.addEventListener('focusout', handleBlur);
 
     return () => {
-      window.removeEventListener('resize', handleResize);
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleViewportChange);
+        window.visualViewport.removeEventListener('scroll', handleViewportChange);
+      }
       window.removeEventListener('focusin', handleFocus);
       window.removeEventListener('focusout', handleBlur);
     };
   }, []);
 
-  // If keyboard is open, DON'T RENDER anything
+  // If hidden (keyboard open), do not render
   if (!isVisible) return null;
 
   const navItems = [
-    { icon: Home, label: "Home", path: "/dashboard" },
-    { icon: Zap, label: "Top-up", path: "/dashboard/recharge" },
-    { icon: History, label: "History", path: "/dashboard/history" },
-    { icon: User, label: "Profile", path: "/dashboard/profile" },
+    { icon: Home, label: "Accueil", path: "/dashboard" },
+    { icon: Zap, label: "Recharge", path: "/dashboard/recharge" },
+    { icon: History, label: "Historique", path: "/dashboard/history" },
+    { icon: User, label: "Profil", path: "/dashboard/profile" },
   ];
 
   return (

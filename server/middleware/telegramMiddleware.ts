@@ -1,10 +1,12 @@
 import { Middleware } from 'telegraf';
 import { BotContext, SessionData } from '../types/telegram.types';
 
-// In-memory session store
+// ============================================================================
+// 1. SESSION MIDDLEWARE
+// ============================================================================
+
 const sessions = new Map<number, SessionData>();
 
-// 1. Session Middleware
 export const sessionMiddleware: Middleware<BotContext> = async (ctx, next) => {
   if (!ctx.from) return next();
 
@@ -29,7 +31,7 @@ export const sessionMiddleware: Middleware<BotContext> = async (ctx, next) => {
 // Cleanup old sessions every 10 minutes
 setInterval(() => {
   const now = Date.now();
-  const MAX_IDLE_TIME = 30 * 60 * 1000; // 30 mins
+  const MAX_IDLE_TIME = 30 * 60 * 1000; 
   for (const [userId, session] of sessions.entries()) {
     if (now - (session.lastActivity || 0) > MAX_IDLE_TIME) {
       sessions.delete(userId);
@@ -37,7 +39,10 @@ setInterval(() => {
   }
 }, 600000);
 
-// 2. Flood Protection (Anti-Spam)
+// ============================================================================
+// 2. FLOOD PROTECTION (Anti-Spam)
+// ============================================================================
+
 interface FloodEntry {
   count: number;
   resetTime: number;
@@ -73,14 +78,72 @@ export const floodProtectionMiddleware: Middleware<BotContext> = async (ctx, nex
   if (entry.count > FLOOD_LIMIT) {
     entry.blocked = true;
     entry.resetTime = now + BLOCK_DURATION;
-    await ctx.reply('⚠️ Anti-Spam: You are sending messages too fast. Please wait 5 minutes.').catch(() => {});
+    // Silent block to prevent further spam
     return;
   }
 
   return next();
 };
 
+// ============================================================================
+// 3. MAINTENANCE MODE
+// ============================================================================
+
+let maintenanceMode = false;
+const ADMIN_IDS = (process.env.ADMIN_TELEGRAM_IDS || '').split(',').map(id => parseInt(id.trim()));
+
+export function setMaintenanceMode(enabled: boolean) {
+  maintenanceMode = enabled;
+}
+
+export const maintenanceMiddleware: Middleware<BotContext> = async (ctx, next) => {
+  if (!maintenanceMode) {
+    return next();
+  }
+
+  // Allow admins to bypass maintenance
+  if (ctx.from && ADMIN_IDS.includes(ctx.from.id)) {
+    return next();
+  }
+
+  await ctx.reply(
+    '🔧 *Maintenance Mode*\n\nWe are currently updating the bot. Please check back in a few minutes.',
+    { parse_mode: 'Markdown' }
+  );
+};
+
+// ============================================================================
+// 4. HEALTH CHECK & ANALYTICS (Fixes your error)
+// ============================================================================
+
+const errorLog: { time: number; error: string }[] = [];
+
+// Call this function from catch blocks to track health
+export function trackError(error: Error) {
+  errorLog.push({ time: Date.now(), error: error.message });
+  if (errorLog.length > 100) errorLog.shift(); // Keep last 100
+}
+
+export function getHealthStatus() {
+  const now = Date.now();
+  // Count errors in the last 5 minutes
+  const recentErrors = errorLog.filter(e => now - e.time < 300000).length;
+  
+  return {
+    status: recentErrors > 10 ? 'degraded' : 'healthy',
+    uptime: process.uptime(),
+    activeSessions: sessions.size,
+    recentErrors: recentErrors,
+    memory: process.memoryUsage().heapUsed / 1024 / 1024 // MB
+  };
+}
+
+// ============================================================================
+// EXPORTS
+// ============================================================================
+
 export const middleware = {
   session: sessionMiddleware,
-  floodProtection: floodProtectionMiddleware
+  floodProtection: floodProtectionMiddleware,
+  maintenance: maintenanceMiddleware
 };
