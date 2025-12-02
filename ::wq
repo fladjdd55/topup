@@ -1,0 +1,22 @@
+import { createRoot } from "react-dom/client";
+import App from "./App";
+import "./index.css";
+
+const root = document.getElementById("root");
+
+if (!root) {
+  throw new Error("Root element not found");
+}
+
+try {
+  createRoot(root).render(<App />);
+} catch (error) {
+  console.error("CRITICAL APP CRASH:", error);
+  root.innerHTML = `
+    <div style="padding: 20px; color: red; font-family: sans-serif;">
+      <h1>Application Crashed</h1>
+      <p>Please check the console for details.</p>
+      <pre>${error}</pre>
+    </div>
+  `;
+}

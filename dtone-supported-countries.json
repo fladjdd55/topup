@@ -1,0 +1,938 @@
+{
+  "totalProducts": 1000,
+  "totalCountries": 1,
+  "totalOperators": 145,
+  "countries": [
+    {
+      "code": "XX",
+      "name": "Unknown",
+      "operators": [
+        "Indomaret Indonesia",
+        "Farmacias Cruz Verde Guatemala",
+        "La Torre Supermercados Guatemala",
+        "PLN",
+        "T2 Mobile Nigeria",
+        "Digicel El Salvador",
+        "Alfamart Indonesia",
+        "Telkomsel Indonesia",
+        "Tri Indonesia",
+        "BPJS Indonesia",
+        "CellC South Africa",
+        "XL Indonesia",
+        "MTN South Africa",
+        "Vodacom South Africa",
+        "Airtel Bangladesh",
+        "Glo Mobile Nigeria",
+        "Airtel Nigeria",
+        "Globe Telecom Philippines",
+        "Ooredoo Qatar",
+        "MTN Nigeria",
+        "Claro Costa Rica",
+        "Claro Guatemala",
+        "Claro Honduras",
+        "Claro Nicaragua",
+        "Tigo Guatemala",
+        "Tigo Honduras",
+        "TNT Philippines",
+        "Meralco",
+        "DTAC Thailand",
+        "Robi Bangladesh",
+        "Maroc Telecom Morocco",
+        "Orange Morocco",
+        "Inwi Morocco",
+        "M1 Singapore",
+        "Singtel Singapore",
+        "Starhub Singapore",
+        "Du United Arab Emirates",
+        "Digicel Haiti",
+        "Africell Gambia",
+        "Touch Mobile Philippines",
+        "Ooredoo Algeria",
+        "Tigo El Salvador",
+        "Mobily Saudi Arabia",
+        "Banglalink Bangladesh",
+        "Smart Philippines",
+        "Dialog Sri Lanka",
+        "Vodafone Egypt",
+        "Orange Egypt",
+        "Indosat Indonesia",
+        "Vodafone Turkey",
+        "China Mobile China",
+        "Viettel Mobile Vietnam",
+        "Vinaphone Vietnam",
+        "Ufone Pakistan",
+        "Mobifone Vietnam",
+        "Airtel India",
+        "AIS Thailand",
+        "Axis Indonesia",
+        "Beeline Kazakhstan",
+        "Mobitel Sri Lanka",
+        "Activ Kazakhstan",
+        "China Unicom China",
+        "TPlus Laos",
+        "NCell Nepal",
+        "Telcel Mexico",
+        "ATT Mexico",
+        "Unefon Mexico",
+        "Movistar Mexico",
+        "Telenor Pakistan",
+        "Vivo Brazil",
+        "TIM Brazil",
+        "Claro Peru",
+        "DiGi Malaysia",
+        "Hotlink Malaysia",
+        "SmartFren Indonesia",
+        "GrameenPhone Bangladesh",
+        "Celcom Malaysia",
+        "BSNL India",
+        "Teletalk Bangladesh",
+        "China Telecom China",
+        "Etisalat Egypt",
+        "Claro Colombia",
+        "Tigo Colombia",
+        "Movistar Colombia",
+        "ATT USA",
+        "T-Mobile USA",
+        "Verizon USA",
+        "Digicel Fiji",
+        "AT Ghana",
+        "Vodacom Mozambique",
+        "Viva DR",
+        "Entel Chile",
+        "Movistar Chile",
+        "Claro Chile",
+        "Heyah Poland",
+        "Orange Poland",
+        "Play Poland",
+        "Plus Poland",
+        "Tak Tak Poland",
+        "Jazz Pakistan",
+        "Claro DR",
+        "Tracfone USA",
+        "Claro El Salvador",
+        "Movistar El Salvador",
+        "Vodacom Tanzania",
+        "SimpleMobile USA",
+        "PagePlus PIN USA",
+        "Zong Pakistan",
+        "Vietna Mobile Vietnam",
+        "Digicel Jamaica",
+        "Movistar Guatemala",
+        "Tigo Panama",
+        "Tigo Nicaragua",
+        "Movistar Ecuador",
+        "Viva Bolivia",
+        "Moov Benin",
+        "MTN Cameroon",
+        "MTN Congo",
+        "MTN Ivory Coast",
+        "Yas Senegal",
+        "Asia Cell Telecom Iraq",
+        "Vodacom DRC",
+        "Ooredoo Palestine",
+        "Ooredoo Tunisia",
+        "Vodafone Fiji",
+        "Flow Turks and Caicos",
+        "Flow British Virgin Islands",
+        "Orange Tunisia",
+        "Orange Madagascar",
+        "Zantel Tanzania",
+        "Flow Anguilla",
+        "Flow Antigua and Barbuda",
+        "Flow Dominica",
+        "Flow Grenada",
+        "Flow Montserrat",
+        "Flow St Kitts and Nevis",
+        "Flow St Lucia",
+        "Flow St Vincent Grenadines",
+        "NTC Nepal",
+        "Flow Barbados",
+        "Flow Cayman Islands",
+        "Movistar Uruguay",
+        "Digicel Guyana",
+        "Safaricom Kenya",
+        "Altice DR"
+      ],
+      "productCount": 1000
+    }
+  ],
+  "operators": [
+    {
+      "id": 1451,
+      "name": "Etisalat Egypt",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 39
+    },
+    {
+      "id": 1537,
+      "name": "Airtel Nigeria",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 27
+    },
+    {
+      "id": 1525,
+      "name": "MTN Congo",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 24
+    },
+    {
+      "id": 1521,
+      "name": "Claro Guatemala",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 23
+    },
+    {
+      "id": 357,
+      "name": "MTN Cameroon",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 23
+    },
+    {
+      "id": 1540,
+      "name": "Flow Barbados",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 23
+    },
+    {
+      "id": 1526,
+      "name": "MTN Ivory Coast",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 22
+    },
+    {
+      "id": 716,
+      "name": "Vodafone Egypt",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 21
+    },
+    {
+      "id": 1522,
+      "name": "Moov Benin",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 21
+    },
+    {
+      "id": 358,
+      "name": "MTN Nigeria",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 18
+    },
+    {
+      "id": 392,
+      "name": "AT Ghana",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 17
+    },
+    {
+      "id": 1533,
+      "name": "Maroc Telecom Morocco",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 15
+    },
+    {
+      "id": 1529,
+      "name": "Yas Senegal",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 14
+    },
+    {
+      "id": 1485,
+      "name": "Play Poland",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 13
+    },
+    {
+      "id": 1612,
+      "name": "Glo Mobile Nigeria",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 12
+    },
+    {
+      "id": 246,
+      "name": "Globe Telecom Philippines",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 12
+    },
+    {
+      "id": 1324,
+      "name": "Telkomsel Indonesia",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 11
+    },
+    {
+      "id": 360,
+      "name": "Dialog Sri Lanka",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 11
+    },
+    {
+      "id": 190,
+      "name": "Orange Egypt",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 11
+    },
+    {
+      "id": 1454,
+      "name": "Tigo Colombia",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 11
+    },
+    {
+      "id": 1456,
+      "name": "Movistar Colombia",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 11
+    },
+    {
+      "id": 1480,
+      "name": "Plus Poland",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 11
+    },
+    {
+      "id": 1512,
+      "name": "Digicel Haiti",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 10
+    },
+    {
+      "id": 1482,
+      "name": "Tak Tak Poland",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 10
+    },
+    {
+      "id": 713,
+      "name": "Vodacom Tanzania",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 10
+    },
+    {
+      "id": 710,
+      "name": "Vodacom DRC",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 10
+    },
+    {
+      "id": 1543,
+      "name": "Flow Dominica",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 10
+    },
+    {
+      "id": 1564,
+      "name": "Safaricom Kenya",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 10
+    },
+    {
+      "id": 570,
+      "name": "Smart Philippines",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 9
+    },
+    {
+      "id": 51,
+      "name": "Claro Colombia",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 9
+    },
+    {
+      "id": 1483,
+      "name": "Heyah Poland",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 9
+    },
+    {
+      "id": 1551,
+      "name": "Zantel Tanzania",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 9
+    },
+    {
+      "id": 1539,
+      "name": "Flow Antigua and Barbuda",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 9
+    },
+    {
+      "id": 1546,
+      "name": "Flow St Kitts and Nevis",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 9
+    },
+    {
+      "id": 1547,
+      "name": "Flow St Lucia",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 9
+    },
+    {
+      "id": 1548,
+      "name": "Flow St Vincent Grenadines",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 9
+    },
+    {
+      "id": 215,
+      "name": "XL Indonesia",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 8
+    },
+    {
+      "id": 1312,
+      "name": "Indosat Indonesia",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 8
+    },
+    {
+      "id": 704,
+      "name": "Viettel Mobile Vietnam",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 8
+    },
+    {
+      "id": 231,
+      "name": "Vinaphone Vietnam",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 8
+    },
+    {
+      "id": 396,
+      "name": "Mobifone Vietnam",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 8
+    },
+    {
+      "id": 1,
+      "name": "AIS Thailand",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 8
+    },
+    {
+      "id": 1459,
+      "name": "ATT USA",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 8
+    },
+    {
+      "id": 1466,
+      "name": "Digicel Fiji",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 8
+    },
+    {
+      "id": 711,
+      "name": "Vodacom Mozambique",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 8
+    },
+    {
+      "id": 1488,
+      "name": "Viva DR",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 8
+    },
+    {
+      "id": 717,
+      "name": "Vodafone Fiji",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 8
+    },
+    {
+      "id": 1544,
+      "name": "Flow Grenada",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 8
+    },
+    {
+      "id": 1711,
+      "name": "Inwi Morocco",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 7
+    },
+    {
+      "id": 1414,
+      "name": "Telcel Mexico",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 7
+    },
+    {
+      "id": 1445,
+      "name": "Claro Peru",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 7
+    },
+    {
+      "id": 1516,
+      "name": "Vietna Mobile Vietnam",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 7
+    },
+    {
+      "id": 1549,
+      "name": "Flow Turks and Caicos",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 7
+    },
+    {
+      "id": 1550,
+      "name": "Flow Anguilla",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 7
+    },
+    {
+      "id": 1477,
+      "name": "Movistar Uruguay",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 7
+    },
+    {
+      "id": 1671,
+      "name": "PLN",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 6
+    },
+    {
+      "id": 1707,
+      "name": "T2 Mobile Nigeria",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 6
+    },
+    {
+      "id": 177,
+      "name": "Digicel El Salvador",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 6
+    },
+    {
+      "id": 1327,
+      "name": "Tri Indonesia",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 6
+    },
+    {
+      "id": 1505,
+      "name": "Tigo El Salvador",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 6
+    },
+    {
+      "id": 1447,
+      "name": "Banglalink Bangladesh",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 6
+    },
+    {
+      "id": 409,
+      "name": "Mobitel Sri Lanka",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 6
+    },
+    {
+      "id": 1442,
+      "name": "NCell Nepal",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 6
+    },
+    {
+      "id": 1412,
+      "name": "ATT Mexico",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 6
+    },
+    {
+      "id": 1415,
+      "name": "Unefon Mexico",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 6
+    },
+    {
+      "id": 1465,
+      "name": "Verizon USA",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 6
+    },
+    {
+      "id": 400,
+      "name": "Jazz Pakistan",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 6
+    },
+    {
+      "id": 1476,
+      "name": "Movistar El Salvador",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 6
+    },
+    {
+      "id": 1475,
+      "name": "Tigo Panama",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 6
+    },
+    {
+      "id": 450,
+      "name": "Viva Bolivia",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 6
+    },
+    {
+      "id": 2060,
+      "name": "La Torre Supermercados Guatemala",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 1726,
+      "name": "CellC South Africa",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 1449,
+      "name": "Airtel Bangladesh",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 1928,
+      "name": "Claro Costa Rica",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 1518,
+      "name": "Claro Honduras",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 553,
+      "name": "Claro Nicaragua",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 2953,
+      "name": "Meralco",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 1446,
+      "name": "Robi Bangladesh",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 2098,
+      "name": "Du United Arab Emirates",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 1411,
+      "name": "Axis Indonesia",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 610,
+      "name": "TIM Brazil",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 1464,
+      "name": "T-Mobile USA",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 1471,
+      "name": "Movistar Chile",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 1478,
+      "name": "Claro Chile",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 1481,
+      "name": "Orange Poland",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 1496,
+      "name": "Claro DR",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 1472,
+      "name": "Movistar Ecuador",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 1507,
+      "name": "Ooredoo Palestine",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 1541,
+      "name": "Flow British Virgin Islands",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 1545,
+      "name": "Flow Montserrat",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 5
+    },
+    {
+      "id": 387,
+      "name": "Orange Morocco",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 4
+    },
+    {
+      "id": 9,
+      "name": "Africell Gambia",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 4
+    },
+    {
+      "id": 486,
+      "name": "Ufone Pakistan",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 4
+    },
+    {
+      "id": 655,
+      "name": "Telenor Pakistan",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 4
+    },
+    {
+      "id": 175,
+      "name": "DiGi Malaysia",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 4
+    },
+    {
+      "id": 1321,
+      "name": "SmartFren Indonesia",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 4
+    },
+    {
+      "id": 249,
+      "name": "GrameenPhone Bangladesh",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 4
+    },
+    {
+      "id": 112,
+      "name": "Celcom Malaysia",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 4
+    },
+    {
+      "id": 1448,
+      "name": "Teletalk Bangladesh",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 4
+    },
+    {
+      "id": 1479,
+      "name": "Entel Chile",
+      "country": "Unknown",
+      "countryCode": "XX",
+      "productCount": 4
+    }
+  ],
+  "requestedCountriesStatus": [
+    {
+      "code": "HT",
+      "found": false,
+      "data": null
+    },
+    {
+      "code": "DO",
+      "found": false,
+      "data": null
+    },
+    {
+      "code": "US",
+      "found": false,
+      "data": null
+    },
+    {
+      "code": "CA",
+      "found": false,
+      "data": null
+    },
+    {
+      "code": "JM",
+      "found": false,
+      "data": null
+    },
+    {
+      "code": "MX",
+      "found": false,
+      "data": null
+    },
+    {
+      "code": "BR",
+      "found": false,
+      "data": null
+    },
+    {
+      "code": "FR",
+      "found": false,
+      "data": null
+    },
+    {
+      "code": "GB",
+      "found": false,
+      "data": null
+    },
+    {
+      "code": "DE",
+      "found": false,
+      "data": null
+    },
+    {
+      "code": "NG",
+      "found": false,
+      "data": null
+    },
+    {
+      "code": "GH",
+      "found": false,
+      "data": null
+    },
+    {
+      "code": "KE",
+      "found": false,
+      "data": null
+    },
+    {
+      "code": "PH",
+      "found": false,
+      "data": null
+    },
+    {
+      "code": "IN",
+      "found": false,
+      "data": null
+    }
+  ]
+}
