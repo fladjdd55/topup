@@ -118,23 +118,40 @@ export interface IStorage {
 }
 
 export class DatabaseStorage implements IStorage {
-  // ... (Existing User methods kept same, abbreviated for space, assuming standard impl) ... 
-  async getUser(id: number) { const [u] = await db.select().from(users).where(eq(users.id, id)); return u ? { ...u, ...decryptUserData(u) } : undefined; }
-  async getUserByEmail(email: string) { const all = await db.select().from(users); const u = all.find(x => x.email && decrypt(x.email) === email); return u ? { ...u, ...decryptUserData(u) } : undefined; }
+  async getUser(id: number) { 
+    const [u] = await db.select().from(users).where(eq(users.id, id)); 
+    return u ? { ...u, ...decryptUserData(u) } : undefined; 
+  }
+
+  async getUserByEmail(email: string) { 
+    const all = await db.select().from(users); 
+    const u = all.find(x => x.email && decrypt(x.email) === email); 
+    return u ? { ...u, ...decryptUserData(u) } : undefined; 
+  }
+
   async getUserByPhone(phone: string) { 
     const all = await db.select().from(users); 
     const target = phone.replace(/[^\d+]/g, '');
     const u = all.find(x => x.phone && decrypt(x.phone)?.replace(/[^\d+]/g, '') === target);
     return u ? { ...u, ...decryptUserData(u) } : undefined;
   }
-  async getUserByIdentifier(id: string) { const u = await this.getUserByEmail(id); return u || await this.getUserByPhone(id); }
-  async getUserByTelegramId(tid: string) { const [u] = await db.select().from(users).where(eq(users.telegramId, tid)); return u ? { ...u, ...decryptUserData(u) } : undefined; }
+
+  async getUserByIdentifier(id: string) { 
+    const u = await this.getUserByEmail(id); 
+    return u || await this.getUserByPhone(id); 
+  }
+
+  async getUserByTelegramId(tid: string) { 
+    const [u] = await db.select().from(users).where(eq(users.telegramId, tid)); 
+    return u ? { ...u, ...decryptUserData(u) } : undefined; 
+  }
   
   async createUser(data: InsertUser) {
     const enc = encryptUserData(data);
     const [u] = await db.insert(users).values({ ...data, ...enc }).returning();
     return { ...u, ...decryptUserData(u) };
   }
+
   async updateUser(id: number, data: Partial<User>) {
     const enc: any = {};
     if (data.email !== undefined) enc.email = encrypt(data.email);
@@ -144,25 +161,29 @@ export class DatabaseStorage implements IStorage {
     const [u] = await db.update(users).set({ ...data, ...enc, updatedAt: new Date().toISOString() }).where(eq(users.id, id)).returning();
     return u ? { ...u, ...decryptUserData(u) } : undefined;
   }
-  async deleteUser(id: number) { await db.delete(users).where(eq(users.id, id)); }
-  async getAllUsers() { const all = await db.select().from(users).orderBy(desc(users.createdAt)); return all.map(u => ({ ...u, ...decryptUserData(u) })); }
 
+  async deleteUser(id: number) { await db.delete(users).where(eq(users.id, id)); }
+
+  async getAllUsers() { 
+    const all = await db.select().from(users).orderBy(desc(users.createdAt)); 
+    return all.map(u => ({ ...u, ...decryptUserData(u) })); 
+  }
 
   async getUserByGoogleId(googleId: string): Promise<User | undefined> {
-  const [user] = await db.select().from(users).where(eq(users.googleId, googleId));
-  if (!user) return undefined;
-  return {
-    ...user,
-    ...decryptUserData({
-      email: user.email,
-      phone: user.phone,
-      firstName: user.firstName,
-      lastName: user.lastName,
-    }),
-  };
-}
+    const [user] = await db.select().from(users).where(eq(users.googleId, googleId));
+    if (!user) return undefined;
+    return {
+      ...user,
+      ...decryptUserData({
+        email: user.email,
+        phone: user.phone,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      }),
+    };
+  }
 
-  // ... (Standard transaction methods) ...
+  // Transactions
   async getTransaction(id: number) { const [t] = await db.select().from(transactions).where(eq(transactions.id, id)); return t; }
   async getTransactionByTransactionId(tid: string) { const [t] = await db.select().from(transactions).where(eq(transactions.transactionId, tid)); return t; }
   async getTransactionByStripeIntentId(sid: string) { const [t] = await db.select().from(transactions).where(eq(transactions.stripePaymentIntentId, sid)); return t; }
@@ -181,17 +202,19 @@ export class DatabaseStorage implements IStorage {
     return { totalRecharged: `$${total} USD`, transactionCount: txs.length, successRate: rate, pendingRequests: pending, recentTransactions: txs.slice(0, 5) };
   }
 
-  // ... (Favorites, Operators) ...
+  // Favorites
   async getFavorite(id: number) { const [f] = await db.select().from(favorites).where(eq(favorites.id, id)); return f; }
   async getFavoritesByUserId(uid: number) { return db.select().from(favorites).where(eq(favorites.userId, uid)).orderBy(desc(favorites.createdAt)); }
   async createFavorite(f: InsertFavorite) { const [n] = await db.insert(favorites).values(f).returning(); return n; }
   async deleteFavorite(id: number) { await db.delete(favorites).where(eq(favorites.id, id)); }
+
+  // Operators
   async getOperator(id: number) { const [o] = await db.select().from(operators).where(eq(operators.id, id)); return o; }
   async getOperatorByCode(code: string) { const [o] = await db.select().from(operators).where(eq(operators.code, code)); return o; }
   async getAllOperators() { return db.select().from(operators).where(eq(operators.isActive, true)); }
   async createOperator(o: InsertOperator) { const [n] = await db.insert(operators).values(o).returning(); return n; }
 
-  // ... (Recharge Requests - UPDATED) ...
+  // Recharge Requests
   async getRechargeRequest(id: number) { const [r] = await db.select().from(rechargeRequests).where(eq(rechargeRequests.id, id)); return r; }
   async getRechargeRequestByCode(code: string) { const [r] = await db.select().from(rechargeRequests).where(eq(rechargeRequests.requestCode, code)); return r; }
   
@@ -229,29 +252,54 @@ export class DatabaseStorage implements IStorage {
   async deleteRechargeRequest(id: number) { await db.delete(rechargeRequests).where(eq(rechargeRequests.id, id)); }
   async getPendingRequestsCount(uid: number) { const [c] = await db.select({ count: count() }).from(rechargeRequests).where(and(eq(rechargeRequests.recipientUserId, uid), eq(rechargeRequests.status, 'pending'))); return c?.count || 0; }
 
-  // ✅✅✅ NEW LINKING METHOD
+  // ✅ FIXED: Robust linking with multiple phone number format checks
   async linkPendingRequestsToUser(userId: number, phone: string) {
     if (!phone) return;
+    
+    // Normalize phone consistently
     let cleanPhone = phone.replace(/[^\d+]/g, '');
     if (!cleanPhone.startsWith('+')) cleanPhone = '+' + cleanPhone;
     
+    // Check variations (some requests might have been created with different formats)
+    const phoneVariations = [
+      cleanPhone,
+      cleanPhone.replace('+', ''), // without +
+      '+' + cleanPhone.replace(/^\+/, '') // ensure single +
+    ];
+    
     console.log(`[Storage] Linking requests for ${cleanPhone} to user ${userId}`);
+    
     try {
-      await db.update(rechargeRequests)
-        .set({ recipientUserId: userId })
-        .where(and(eq(rechargeRequests.receiverPhone, cleanPhone), isNull(rechargeRequests.recipientUserId)));
-    } catch (e) { console.error('[Storage] Link error:', e); }
+      for (const variant of phoneVariations) {
+        await db.update(rechargeRequests)
+          .set({ recipientUserId: userId })
+          .where(
+            and(
+              eq(rechargeRequests.receiverPhone, variant),
+              isNull(rechargeRequests.recipientUserId)
+            )
+          );
+      }
+    } catch (e) { 
+      console.error('[Storage] Link error:', e); 
+    }
   }
 
-  // ... (Notifications, Stripe, Reset Tokens, etc. - kept standard) ...
+  // Notifications
   async getNotificationsByUserId(uid: number) { return db.select().from(notifications).where(eq(notifications.userId, uid)).orderBy(desc(notifications.createdAt)).limit(50); }
   async createNotification(n: InsertNotification) { const [nn] = await db.insert(notifications).values(n).returning(); return nn; }
   async markNotificationAsRead(id: number) { await db.update(notifications).set({ isRead: true, updatedAt: new Date().toISOString() }).where(eq(notifications.id, id)); }
+  
+  // Stripe
   async getStripeCustomerByUserId(uid: number) { const [c] = await db.select().from(stripeCustomers).where(eq(stripeCustomers.userId, uid)); return c; }
   async createStripeCustomer(c: InsertStripeCustomer) { const [nc] = await db.insert(stripeCustomers).values(c).returning(); return nc; }
+  
+  // Password Reset
   async createPasswordResetToken(t: InsertPasswordResetToken) { const [nt] = await db.insert(passwordResetTokens).values(t).returning(); return nt; }
   async getPasswordResetToken(t: string) { const [rt] = await db.select().from(passwordResetTokens).where(eq(passwordResetTokens.token, t)); return rt; }
   async markPasswordResetTokenAsUsed(id: number) { await db.update(passwordResetTokens).set({ used: true }).where(eq(passwordResetTokens.id, id)); }
+  
+  // Admin
   async getAdminStats() { 
     const [uc] = await db.select({ count: count() }).from(users);
     const txs = await db.select().from(transactions);
@@ -261,7 +309,7 @@ export class DatabaseStorage implements IStorage {
     return { totalUsers: uc?.count || 0, totalRevenue: `$${rev} USD`, totalTransactions: txs.length, successRate: rate };
   }
 
-  // ... (Currencies, Recurring, Loyalty - kept standard) ...
+  // Currencies
   async getAllCurrencies() { return db.select().from(currencies); }
   async getActiveCurrencies() { return db.select().from(currencies).where(eq(currencies.isActive, true)); }
   async getCurrencyByCode(c: string) { const [curr] = await db.select().from(currencies).where(eq(currencies.code, c)); return curr; }
@@ -271,6 +319,8 @@ export class DatabaseStorage implements IStorage {
     if (!f || !t) throw new Error('Currency not found');
     return Math.round((amt / parseFloat(f.exchangeRate)) * parseFloat(t.exchangeRate) * 100) / 100;
   }
+  
+  // Recurring
   async getRecurringRecharge(id: number) { const [r] = await db.select().from(recurringRecharges).where(eq(recurringRecharges.id, id)); return r; }
   async getRecurringRechargesByUserId(uid: number) { return db.select().from(recurringRecharges).where(eq(recurringRecharges.userId, uid)).orderBy(desc(recurringRecharges.createdAt)); }
   async getActiveRecurringRecharges() { return db.select().from(recurringRecharges).where(eq(recurringRecharges.isActive, true)); }
@@ -279,6 +329,7 @@ export class DatabaseStorage implements IStorage {
   async updateRecurringRecharge(id: number, d: Partial<RecurringRecharge>) { const [r] = await db.update(recurringRecharges).set({ ...d, updatedAt: new Date().toISOString() }).where(eq(recurringRecharges.id, id)).returning(); return r; }
   async deleteRecurringRecharge(id: number) { await db.delete(recurringRecharges).where(eq(recurringRecharges.id, id)); }
 
+  // Loyalty
   async getLoyaltyTiers() { return db.select().from(loyaltyTiers).orderBy(loyaltyTiers.minPoints); }
   async getLoyaltyTierById(id: number) { const [t] = await db.select().from(loyaltyTiers).where(eq(loyaltyTiers.id, id)); return t; }
   async getLoyaltyTierByPoints(pts: number) { 
@@ -308,7 +359,7 @@ export class DatabaseStorage implements IStorage {
     if (u) await this.updateUser(uid, { balance: (parseFloat(u.balance || '0') + credit).toString() });
     return { success: true, creditAmount: credit, message: 'Succès' };
   }
-  async getChartData(uid: number, period: string) { return { timeline: [], operators: [] }; } // Simplified for brevity
+  async getChartData(uid: number, period: string) { return { timeline: [], operators: [] }; } 
 }
 
 export const storage = new DatabaseStorage();

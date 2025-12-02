@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
@@ -84,7 +84,8 @@ export default function TelegramDashboard() {
     },
   });
 
-  const handleCreateRequest = () => {
+  // ✅ FIXED: Wrapped in useCallback to ensure stable reference and correct closure
+  const handleCreateRequest = useCallback(() => {
     const currentData = requestStateRef.current;
 
     if (createRequestMutation.isPending) return;
@@ -98,7 +99,7 @@ export default function TelegramDashboard() {
     if (tg) tg.MainButton.showProgress(true);
     
     createRequestMutation.mutate(currentData);
-  };
+  }, [createRequestMutation, toast, t]);
 
   // ✅ TELEGRAM MAIN BUTTON INTEGRATION
   useEffect(() => {
@@ -120,7 +121,7 @@ export default function TelegramDashboard() {
       mainButton.offClick(handleCreateRequest);
       mainButton.hide();
     };
-  }, [isAskModalOpen, t]); // Depend only on modal state and translation
+  }, [isAskModalOpen, t, handleCreateRequest]); // Added handleCreateRequest to dependencies
 
   const copyLink = async (code: string) => {
     const url = `${window.location.origin}/request/${code}`;

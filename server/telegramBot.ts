@@ -111,8 +111,11 @@ bot.command('history', async (ctx) => {
 
 // Middleware to check admin status
 const adminOnly = async (ctx: BotContext, next: () => Promise<void>) => {
-  if (!botConfig.adminIds.includes(ctx.from?.id || 0)) {
-    return; // Silently ignore non-admins
+  const userId = ctx.from?.id || 0;
+  
+  if (!botConfig.adminIds.includes(userId)) {
+    await ctx.reply('⚠️ Unauthorized. This command is restricted.');
+    return;
   }
   return next();
 };
