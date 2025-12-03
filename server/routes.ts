@@ -13,7 +13,12 @@ import {
   updateProfileSchema,   
   insertRechargeRequestSchema
 } from "@shared/schema";
-import { validatePhoneNumber } from "@shared/phoneValidation";
+// ✅ NEW IMPORT: Import from the improved validator
+import { 
+  validatePhoneNumber, 
+  formatToE164, 
+  formatForDisplay 
+} from "@shared/phoneValidation";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -22,8 +27,6 @@ import { convertToUSD } from "@shared/currencyRates";
 import bodyParser from "body-parser";
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import { parsePhoneNumber, CountryCode } from 'libphonenumber-js';
-
 // ✅ IMPORT TELEGRAM BOT & CONFIG
 import { bot, sendTelegramNotification, createTelegramInvoiceLink } from "./telegramBot";
 import { botConfig } from "./config/bot.config";
@@ -45,7 +48,6 @@ declare module 'express-session' {
 const DINGCONNECT_COMMISSION_RATE = parseFloat(process.env.COMMISSION_PROVIDER_RATE || '0.09'); 
 const STRIPE_FEE_RATE = parseFloat(process.env.COMMISSION_STRIPE_RATE || '0.03'); 
 const PROFIT_MARGIN = parseFloat(process.env.COMMISSION_PROFIT_MARGIN || '0.03');
-const DEFAULT_COUNTRY = (process.env.DEFAULT_COUNTRY_ISO || 'HT') as CountryCode;
 
 function calculateCommission(amount: number | string): number {
   const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -54,17 +56,11 @@ function calculateCommission(amount: number | string): number {
   return parseFloat(commission.toFixed(2));
 }
 
-// ✅ ROBUST PHONE VALIDATION
+// ✅ UPDATED: Simple normalization helper (used internally if needed, but prefer validatePhoneNumber)
 function normalizePhoneNumber(phone: string): string {
-  try {
-    const phoneNumber = parsePhoneNumber(phone, DEFAULT_COUNTRY); 
-    if (!phoneNumber || !phoneNumber.isValid()) {
-      throw new Error('Numéro de téléphone invalide');
-    }
-    return phoneNumber.number;
-  } catch (error) {
-    throw new Error(`Format de numéro invalide: ${phone}`);
-  }
+  let cleaned = phone.replace(/[^\d+]/g, '');
+  if (!cleaned.startsWith('+')) cleaned = '+' + cleaned;
+  return cleaned;
 }
 
 function getBaseUrl(req: Request): string {
@@ -196,7 +192,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const { sendRecharge } = await import('./dingconnect');
-      const dingResult = await sendRecharge(phoneNumber, amountUSD, transactionId, 'HT');
+      // Use HT as default region code for DingConnect if not available in metadata, 
+      // but ideally it should be passed or derived.
+      // For simplicity keeping 'HT' as per original, but could be improved.
+      const dingResult = await sendRecharge(phoneNumber, amountUSD, transactionId, metadata.countryCode || 'HT');
 
       if (dingResult.ResultCode === 1) {
         // Success
@@ -329,12 +328,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { amount, phoneNumber, currency = 'USD' } = req.body;
       if (!amount || !phoneNumber) return res.status(400).json({ message: 'Données manquantes' });
 
-      let cleanPhoneNumber;
-      try {
-        cleanPhoneNumber = normalizePhoneNumber(phoneNumber);
-      } catch (e: any) {
-        return res.status(400).json({ message: e.message });
+      // ✅ NEW: Robust validation
+      const validation = validatePhoneNumber(phoneNumber, 'HT'); // Default to Haiti
+      
+      if (!validation.isValid) {
+        return res.status(400).json({ 
+           message: validation.error || 'Numéro de téléphone invalide',
+           details: {
+             input: phoneNumber,
+             suggestion: 'Use international format: +50937001234'
+           }
+        });
       }
+
+      const cleanPhoneNumber = validation.fullNumber!; // E.164 format
 
       const numAmount = parseFloat(amount);
       const amountInUSD = convertToUSD(numAmount, currency);
@@ -352,7 +359,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         commission: commission.toString(),
         totalReceived: totalAmount.toString(), 
         totalReceivedUsd: totalAmount.toString(),
-        operatorCode: 'UNKNOWN',
+        operatorCode: validation.carrier || 'UNKNOWN',
         paymentMethod: 'telegram_native',
         status: 'pending', 
         currency: currency,
@@ -373,17 +380,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/stripe/create-checkout-session', paymentLimiter, async (req, res) => {
     try {
       const { amount, phoneNumber, currency = 'USD', requestCode, recurringRechargeId } = req.body;
-      if (!amount || !phoneNumber) return res.status(400).json({ message: 'Données manquantes' });
       
-      let cleanPhoneNumber;
-      try {
-        cleanPhoneNumber = normalizePhoneNumber(phoneNumber);
-      } catch (e: any) {
-        return res.status(400).json({ message: "Numéro de téléphone invalide (format international requis)" });
+      if (!amount || !phoneNumber) {
+        return res.status(400).json({ message: 'Données manquantes' });
       }
 
-      const validation = validatePhoneNumber(cleanPhoneNumber);
-      if (!validation.isValid) return res.status(400).json({ message: 'Numéro invalide pour la recharge' });
+      // ✅ NEW: Robust validation using shared validator
+      const validation = validatePhoneNumber(phoneNumber, 'HT'); // Default to Haiti
+      
+      if (!validation.isValid) {
+        return res.status(400).json({ 
+           message: validation.error || 'Numéro de téléphone invalide',
+           details: {
+             input: phoneNumber,
+             suggestion: 'Use international format: +50937001234'
+           }
+        });
+      }
+
+      // Use the validated E.164 format
+      const cleanPhoneNumber = validation.fullNumber!;
+      const operatorCode = validation.carrier || 'UNKNOWN';
+      
+      console.log('📱 Phone validated:', {
+        input: phoneNumber,
+        output: cleanPhoneNumber,
+        country: validation.country,
+        operator: validation.carrier,
+        type: validation.type
+      });
 
       const numAmount = parseFloat(amount);
       const amountInUSD = convertToUSD(numAmount, currency);
@@ -399,8 +424,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           price_data: { 
             currency: 'usd', 
             product_data: { 
-              name: `Recharge Mobile (${validation.country})`, 
-              description: `${amount} ${currency} pour ${cleanPhoneNumber}` 
+              name: `Mobile Recharge (${validation.country})`, 
+              description: `${amount} ${currency} for ${formatForDisplay(cleanPhoneNumber)}` // Pretty format for receipt
             }, 
             unit_amount: Math.round(totalAmount * 100) 
           }, 
@@ -410,8 +435,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         cancel_url: `${baseUrl}/dashboard/recharge?canceled=true`,
         metadata: { 
           userId: req.session.userId?.toString() || 'guest', 
-          phoneNumber: cleanPhoneNumber, 
-          operatorCode: validation.operator || 'UNKNOWN', 
+          phoneNumber: cleanPhoneNumber, // E.164 format
+          operatorCode: operatorCode, 
+          countryCode: validation.countryCode || 'HT',
           baseAmount: amount.toString(), 
           baseCurrency: currency, 
           baseAmountUSD: amountInUSD.toString(), 
@@ -422,7 +448,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
       });
       res.json({ url: session.url });
-    } catch (error: any) { res.status(500).json({ message: error.message }); }
+    } catch (error: any) { 
+      console.error('[Stripe] Checkout error:', error);
+      res.status(500).json({ message: error.message }); 
+    }
   });
 
   app.get('/api/stripe/checkout-success', async (req, res) => {
@@ -448,6 +477,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const hashedPassword = await bcrypt.hash(data.password, 10);
       const user = await storage.createUser({ ...data, password: hashedPassword });
       
+      // ✅ FIX: Session Fixation Protection
       req.session.regenerate((err) => {
         if (err) return res.status(500).json({ message: 'Erreur session' });
         req.session.userId = user.id;
@@ -465,6 +495,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.getUserByIdentifier(identifier);
       if (!user || !user.password || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ message: 'Identifiants incorrects' });
       
+      // ✅ FIX: Session Fixation Protection
       req.session.regenerate((err) => {
         if (err) return res.status(500).json({ message: 'Erreur session' });
         req.session.userId = user.id;
@@ -526,6 +557,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) { res.status(500).json({ message: 'Mise à jour échouée' }); }
   });
 
+  // Request Routes
   app.get('/api/recharge-requests', requireAuth, async (req, res) => { const requests = await storage.getRechargeRequestsByRecipientUserId(req.session.userId!); res.json(requests); });
   app.get('/api/recharge-requests/sent', requireAuth, async (req, res) => { const requests = await storage.getRechargeRequestsBySenderId(req.session.userId!); res.json(requests); });
   app.post('/api/recharge-requests', requireAuth, async (req, res) => {
@@ -535,6 +567,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const expiresAt = new Date(); expiresAt.setDate(expiresAt.getDate() + 7);
       const request = await storage.createRechargeRequest({ ...data, userId: req.session.userId!, requestCode, expiresAt: expiresAt.toISOString(), status: 'pending' });
       if (data.receiverPhone) { 
+        // Try precise match first, usually phone numbers should be normalized before storing/searching
         const recipient = await storage.getUserByPhone(data.receiverPhone); 
         if (recipient) await storage.updateRechargeRequest(request.id, { recipientUserId: recipient.id });
       }

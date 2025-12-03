@@ -1,4 +1,5 @@
-import { patterns, limits, countryConfigs } from '../config/bot.config';
+import { validatePhoneNumber as sharedValidatePhone } from '@shared/phoneValidation';
+import { limits } from '../config/bot.config';
 
 export interface ValidationResult {
   valid: boolean;
@@ -6,19 +7,36 @@ export interface ValidationResult {
   sanitized?: any;
 }
 
+/**
+ * Validates phone number using the shared library
+ * Adapts the output for the Telegram Bot logic
+ */
 export function validatePhoneNumber(phone: string): ValidationResult {
-  if (!phone) return { valid: false, error: 'Phone number is required' };
-  
-  // Remove spaces, dashes, parentheses
-  const trimmed = phone.replace(/[\s\-\(\)]/g, '');
-  
-  if (!patterns.phoneNumber.test(trimmed)) {
-    return { valid: false, error: 'Invalid format. Use: +509...' };
+  if (!phone) {
+    return { valid: false, error: 'Phone number is required' };
   }
-  return { valid: true, sanitized: trimmed };
+  
+  // Use the robust shared validator we created earlier
+  // We default to 'HT' (Haiti) for user convenience if they omit the country code
+  const result = sharedValidatePhone(phone, 'HT'); 
+  
+  if (!result.isValid) {
+    return { 
+      valid: false, 
+      error: result.error || 'Invalid format. Example: +509 3700 1234' 
+    };
+  }
+  
+  return { 
+    valid: true, 
+    sanitized: result.fullNumber // Returns E.164 format (e.g. +50937001234)
+  };
 }
 
-export function validateAmount(amount: string | number, countryCode?: string): ValidationResult {
+/**
+ * Validates recharge amount against global limits
+ */
+export function validateAmount(amount: string | number): ValidationResult {
   const num = typeof amount === 'string' ? parseFloat(amount) : amount;
 
   if (isNaN(num) || num <= 0) {
@@ -33,10 +51,15 @@ export function validateAmount(amount: string | number, countryCode?: string): V
     return { valid: false, error: `Maximum amount is $${limits.maxRechargeAmount}` };
   }
 
+  // Round to 2 decimal places to avoid floating point weirdness
   return { valid: true, sanitized: Math.round(num * 100) / 100 };
 }
 
+/**
+ * Basic input sanitization to prevent injection
+ */
 export function sanitizeInput(input: string): string {
   if (!input) return '';
+  // Remove potential HTML tags and limit length
   return input.trim().replace(/[<>]/g, '').slice(0, 500);
 }

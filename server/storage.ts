@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, desc, and, sql, or, count, isNull, lt, lte } from "drizzle-orm"; // ✅ Added lt, lte
+import { eq, desc, and, sql, or, count, isNull, lt, lte } from "drizzle-orm";
 import { 
   users, transactions, favorites, operators, rechargeRequests, notifications,
   stripeCustomers, passwordResetTokens, currencies, recurringRecharges,
@@ -14,6 +14,14 @@ import {
   type InsertLoyaltyPoints, type LoyaltyTransaction, type InsertLoyaltyTransaction,
 } from "@shared/schema";
 import { encrypt, decrypt, encryptUserData, decryptUserData } from "./encryption";
+
+// ✅ HELPER: Decrypt transaction sensitive data
+function decryptTransaction(tx: Transaction): Transaction {
+  return {
+    ...tx,
+    phoneNumber: decrypt(tx.phoneNumber) || tx.phoneNumber // Fallback to plaintext if decrypt fails
+  };
+}
 
 export interface IStorage {
   // Users
@@ -183,18 +191,64 @@ export class DatabaseStorage implements IStorage {
     };
   }
 
-  // Transactions
-  async getTransaction(id: number) { const [t] = await db.select().from(transactions).where(eq(transactions.id, id)); return t; }
-  async getTransactionByTransactionId(tid: string) { const [t] = await db.select().from(transactions).where(eq(transactions.transactionId, tid)); return t; }
-  async getTransactionByStripeIntentId(sid: string) { const [t] = await db.select().from(transactions).where(eq(transactions.stripePaymentIntentId, sid)); return t; }
-  async getTransactionsByUserId(uid: number) { return db.select().from(transactions).where(eq(transactions.userId, uid)).orderBy(desc(transactions.createdAt)); }
-  async getAllTransactions(limit = 100) { return db.select().from(transactions).orderBy(desc(transactions.createdAt)).limit(limit); }
-  async createTransaction(t: InsertTransaction) { const [newT] = await db.insert(transactions).values(t).returning(); return newT; }
-  async updateTransaction(id: number, data: Partial<Transaction>) { const [t] = await db.update(transactions).set({ ...data, updatedAt: new Date().toISOString() }).where(eq(transactions.id, id)).returning(); return t; }
+  // ==================== TRANSACTIONS (SECURED) ====================
   
-  // ✅ FIX: Replaced raw SQL with Drizzle Query Builder
+  async getTransaction(id: number) { 
+    const [t] = await db.select().from(transactions).where(eq(transactions.id, id)); 
+    return t ? decryptTransaction(t) : undefined; 
+  }
+
+  async getTransactionByTransactionId(tid: string) { 
+    const [t] = await db.select().from(transactions).where(eq(transactions.transactionId, tid)); 
+    return t ? decryptTransaction(t) : undefined; 
+  }
+
+  async getTransactionByStripeIntentId(sid: string) { 
+    const [t] = await db.select().from(transactions).where(eq(transactions.stripePaymentIntentId, sid)); 
+    return t ? decryptTransaction(t) : undefined; 
+  }
+
+  async getTransactionsByUserId(uid: number) { 
+    const txs = await db.select().from(transactions).where(eq(transactions.userId, uid)).orderBy(desc(transactions.createdAt));
+    return txs.map(decryptTransaction);
+  }
+
+  async getAllTransactions(limit = 100) { 
+    const txs = await db.select().from(transactions).orderBy(desc(transactions.createdAt)).limit(limit);
+    return txs.map(decryptTransaction);
+  }
+
+  // ✅ FIX: Encrypt phone number before inserting
+  async createTransaction(t: InsertTransaction) { 
+    const encryptedPhone = encrypt(t.phoneNumber);
+    // If encryption returns null (empty string), fallback to original (though it should be validated before this)
+    const phoneToStore = encryptedPhone || t.phoneNumber;
+    
+    const [newT] = await db.insert(transactions).values({
+      ...t,
+      phoneNumber: phoneToStore
+    }).returning();
+    
+    return decryptTransaction(newT);
+  }
+
+  async updateTransaction(id: number, data: Partial<Transaction>) { 
+    // If updating phone number (rare), encrypt it too
+    const updateData = { ...data };
+    if (data.phoneNumber) {
+      updateData.phoneNumber = encrypt(data.phoneNumber) || data.phoneNumber;
+    }
+
+    const [t] = await db.update(transactions)
+      .set({ ...updateData, updatedAt: new Date().toISOString() })
+      .where(eq(transactions.id, id))
+      .returning();
+      
+    return t ? decryptTransaction(t) : undefined;
+  }
+  
   async getExpiredPendingConfirmations(time: string) { 
-    return db
+    const txs = await db
       .select()
       .from(transactions)
       .where(
@@ -203,9 +257,11 @@ export class DatabaseStorage implements IStorage {
           lt(transactions.confirmationDeadline, time)
         )
       ); 
+    return txs.map(decryptTransaction);
   }
   
   async getDashboardStats(userId: number) {
+    // getTransactionsByUserId already handles decryption
     const txs = await this.getTransactionsByUserId(userId);
     const completed = txs.filter(t => t.status === 'completed');
     const total = completed.reduce((sum, t) => sum + (t.totalReceivedUsd ? parseFloat(t.totalReceivedUsd) : parseFloat(t.amount)), 0).toFixed(2);
@@ -335,7 +391,7 @@ export class DatabaseStorage implements IStorage {
   async getRecurringRechargesByUserId(uid: number) { return db.select().from(recurringRecharges).where(eq(recurringRecharges.userId, uid)).orderBy(desc(recurringRecharges.createdAt)); }
   async getActiveRecurringRecharges() { return db.select().from(recurringRecharges).where(eq(recurringRecharges.isActive, true)); }
   
-  // ✅ FIX: Also secured recurring recharges query
+  // ✅ FIX: Replaced raw SQL with Drizzle Query Builder
   async getPendingRecurringRecharges() { 
     return db
       .select()

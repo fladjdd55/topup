@@ -5,7 +5,10 @@ import type { Server } from 'http';
 export interface AuthenticatedWebSocket extends WebSocket {
   userId?: number;
   isAuthenticated: boolean;
+  isAlive: boolean; // Useful for heartbeat checks later
 }
+
+const AUTH_TIMEOUT_MS = 30 * 1000; // 30 seconds to authenticate
 
 class WebSocketManager {
   private wss: WebSocketServer | null = null;
@@ -17,16 +20,19 @@ class WebSocketManager {
     this.wss.on('connection', (ws: AuthenticatedWebSocket, request: IncomingMessage) => {
       console.log('[WebSocket] New connection attempt');
 
-      // Extract session from cookies
-      const cookies = request.headers.cookie?.split(';').reduce((acc, cookie) => {
-        const [key, value] = cookie.trim().split('=');
-        acc[key] = value;
-        return acc;
-      }, {} as Record<string, string>);
-
-      // Mark as unauthenticated initially
+      // 1. Initial State
       ws.isAuthenticated = false;
+      ws.isAlive = true;
       this.clients.add(ws);
+
+      // ✅ FIX: Set strict timeout for authentication
+      const authTimer = setTimeout(() => {
+        if (!ws.isAuthenticated) {
+          console.warn('[WebSocket] 🛑 Client terminated: Auth timeout');
+          ws.terminate(); // Force close
+          this.clients.delete(ws);
+        }
+      }, AUTH_TIMEOUT_MS);
 
       // Send welcome message
       ws.send(JSON.stringify({
@@ -35,19 +41,25 @@ class WebSocketManager {
         timestamp: new Date().toISOString(),
       }));
 
+      ws.on('pong', () => { ws.isAlive = true; });
+
       ws.on('message', (message: string) => {
         try {
           const data = JSON.parse(message.toString());
           
           if (data.type === 'authenticate' && data.userId) {
+            // ✅ FIX: Clear timeout on success
+            clearTimeout(authTimer);
+            
             ws.userId = data.userId;
             ws.isAuthenticated = true;
+            
             ws.send(JSON.stringify({
               type: 'authenticated',
               userId: data.userId,
               timestamp: new Date().toISOString(),
             }));
-            console.log(`[WebSocket] User ${data.userId} authenticated`);
+            console.log(`[WebSocket] ✅ User ${data.userId} authenticated`);
           }
 
           if (data.type === 'ping') {
@@ -59,17 +71,28 @@ class WebSocketManager {
       });
 
       ws.on('close', () => {
+        clearTimeout(authTimer); // Clean up timer if they disconnect early
         console.log(`[WebSocket] Client disconnected${ws.userId ? ` (userId: ${ws.userId})` : ''}`);
         this.clients.delete(ws);
       });
 
       ws.on('error', (error) => {
+        clearTimeout(authTimer);
         console.error('[WebSocket] Error:', error);
         this.clients.delete(ws);
       });
     });
 
     console.log('[WebSocket] Server initialized on path /ws');
+    
+    // Optional: Keep-alive interval to clean up dead sockets (zombies)
+    setInterval(() => {
+      this.clients.forEach((ws) => {
+        if (!ws.isAlive) return ws.terminate();
+        ws.isAlive = false;
+        ws.ping();
+      });
+    }, 30000);
   }
 
   // Broadcast to all connected clients
@@ -85,8 +108,6 @@ class WebSocketManager {
         client.send(message);
       }
     });
-
-    console.log(`[WebSocket] Broadcasted '${event}' to ${this.clients.size} clients`);
   }
 
   // Send to specific user
@@ -99,6 +120,7 @@ class WebSocketManager {
 
     let sent = 0;
     this.clients.forEach((client) => {
+      // ✅ Only send to authenticated clients
       if (client.readyState === WebSocket.OPEN && client.userId === userId && client.isAuthenticated) {
         client.send(message);
         sent++;
@@ -112,8 +134,7 @@ class WebSocketManager {
 
   // Send to all admins
   sendToAdmins(event: string, data: any) {
-    // This would require role information in the WebSocket connection
-    // For now, we'll use broadcast for admin events
+    // In a real app, check client.role === 'admin'
     this.broadcast(event, data);
   }
 

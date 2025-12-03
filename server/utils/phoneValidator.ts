@@ -10,7 +10,7 @@ export interface PhoneValidationResult {
   isValid: boolean;
   fullNumber?: string;        // E.164 format: +50937001234
   nationalNumber?: string;    // National format: (509) 3700-1234
-  countryCode?: CountryCode;  // ISO code: HT
+  countryCode?: string;       // ISO code: HT
   country?: string;           // Full name: Haiti
   carrier?: string;           // Operator name
   type?: 'mobile' | 'fixed' | 'unknown';
@@ -23,7 +23,7 @@ export interface OperatorInfo {
   prefixes: string[];
 }
 
-// Haiti operator detection (Keep this updated as operators change)
+// Haiti operator detection
 const HAITI_OPERATORS: OperatorInfo[] = [
   {
     code: 'NATCOM',
@@ -53,22 +53,8 @@ function detectOperator(phoneNumber: LibPhoneNumber): string | undefined {
     }
   }
   
-  // For other countries, return generic operator code which matches your DB schema
+  // For other countries, return generic operator code
   return phoneNumber.country ? `DTONE_${phoneNumber.country}` : undefined;
-}
-
-/**
- * Helper: Get localized country name natively
- * Removes the need to maintain a manual list of countries
- */
-function getCountryName(code?: CountryCode): string {
-  if (!code) return 'Unknown';
-  try {
-    // Defaults to English, but you can pass 'fr' or 'ht' if you have the locale context
-    return new Intl.DisplayNames(['en'], { type: 'region' }).of(code) || code;
-  } catch (e) {
-    return code;
-  }
 }
 
 /**
@@ -90,23 +76,21 @@ export function validatePhoneNumber(
   const cleaned = input.trim();
 
   try {
-    let phoneNumber: LibPhoneNumber | undefined;
+    // Try parsing with country hint
+    let phoneNumber: LibPhoneNumber;
     
-    // ✅ FIX: Allow international paste even if default country is set
-    // If input starts with '+', parse it globally. Otherwise use the default country.
-    if (cleaned.startsWith('+')) {
-      phoneNumber = parsePhoneNumber(cleaned);
-    } else if (defaultCountry) {
+    if (defaultCountry) {
       phoneNumber = parsePhoneNumber(cleaned, defaultCountry);
     } else {
+      // Try parsing without country (will detect from + prefix)
       phoneNumber = parsePhoneNumber(cleaned);
     }
 
     // Validate the parsed number
-    if (!phoneNumber || !phoneNumber.isValid()) {
+    if (!phoneNumber.isValid()) {
       return {
         isValid: false,
-        error: 'Numéro de téléphone invalide'
+        error: 'Invalid phone number format'
       };
     }
 
@@ -120,12 +104,15 @@ export function validatePhoneNumber(
       type = 'fixed';
     }
 
+    // Get country name
+    const countryName = getCountryName(phoneNumber.country);
+
     return {
       isValid: true,
-      fullNumber: phoneNumber.number as string, // +50937001234
+      fullNumber: phoneNumber.number,           // +50937001234
       nationalNumber: phoneNumber.formatNational(), // (509) 3700-1234
       countryCode: phoneNumber.country,         // HT
-      country: getCountryName(phoneNumber.country), // Haiti
+      country: countryName,                     // Haiti
       carrier: detectOperator(phoneNumber),     // NATCOM or DIGICEL
       type
     };
@@ -133,24 +120,36 @@ export function validatePhoneNumber(
   } catch (error: any) {
     // Specific error messages for common issues
     if (error.message.includes('NOT_A_NUMBER')) {
-      return { isValid: false, error: 'Veuillez entrer un numéro valide' };
+      return {
+        isValid: false,
+        error: 'Please enter a valid phone number'
+      };
     }
     
     if (error.message.includes('TOO_SHORT')) {
-      return { isValid: false, error: 'Le numéro est trop court' };
+      return {
+        isValid: false,
+        error: 'Phone number is too short'
+      };
     }
     
     if (error.message.includes('TOO_LONG')) {
-      return { isValid: false, error: 'Le numéro est trop long' };
+      return {
+        isValid: false,
+        error: 'Phone number is too long'
+      };
     }
 
     if (error.message.includes('INVALID_COUNTRY')) {
-      return { isValid: false, error: 'Code pays invalide' };
+      return {
+        isValid: false,
+        error: 'Invalid country code'
+      };
     }
 
     return {
       isValid: false,
-      error: 'Format invalide. Utilisez le format international (ex: +509...)'
+      error: 'Invalid phone number format. Use international format (e.g., +50937001234)'
     };
   }
 }
@@ -160,10 +159,6 @@ export function validatePhoneNumber(
  */
 export function isValidPhone(input: string, defaultCountry?: CountryCode): boolean {
   try {
-    // Same logic: respect + prefix
-    if (input.trim().startsWith('+')) {
-      return isValidPhoneNumber(input);
-    }
     if (defaultCountry) {
       return isValidPhoneNumber(input, defaultCountry);
     }
@@ -178,12 +173,11 @@ export function isValidPhone(input: string, defaultCountry?: CountryCode): boole
  */
 export function formatToE164(input: string, defaultCountry?: CountryCode): string | null {
   try {
-    const cleaned = input.trim();
-    const phoneNumber = (cleaned.startsWith('+') || !defaultCountry)
-      ? parsePhoneNumber(cleaned)
-      : parsePhoneNumber(cleaned, defaultCountry);
+    const phoneNumber = defaultCountry 
+      ? parsePhoneNumber(input, defaultCountry)
+      : parsePhoneNumber(input);
     
-    return phoneNumber ? (phoneNumber.number as string) : null;
+    return phoneNumber.number; // Returns +50937001234
   } catch {
     return null;
   }
@@ -194,12 +188,11 @@ export function formatToE164(input: string, defaultCountry?: CountryCode): strin
  */
 export function formatForDisplay(input: string, defaultCountry?: CountryCode): string {
   try {
-    const cleaned = input.trim();
-    const phoneNumber = (cleaned.startsWith('+') || !defaultCountry)
-      ? parsePhoneNumber(cleaned)
-      : parsePhoneNumber(cleaned, defaultCountry);
+    const phoneNumber = defaultCountry 
+      ? parsePhoneNumber(input, defaultCountry)
+      : parsePhoneNumber(input);
     
-    return phoneNumber ? phoneNumber.formatInternational() : input;
+    return phoneNumber.formatInternational(); // Returns +509 37 00 1234
   } catch {
     return input; // Return original if parsing fails
   }
@@ -214,6 +207,29 @@ export function getCallingCode(countryCode: CountryCode): string {
   } catch {
     return '';
   }
+}
+
+/**
+ * Helper: Get country name from code
+ */
+function getCountryName(code?: CountryCode): string {
+  const countryNames: Record<string, string> = {
+    'HT': 'Haiti',
+    'US': 'United States',
+    'CA': 'Canada',
+    'DO': 'Dominican Republic',
+    'JM': 'Jamaica',
+    'MX': 'Mexico',
+    'BR': 'Brazil',
+    'FR': 'France',
+    'GB': 'United Kingdom',
+    'DE': 'Germany',
+    'ES': 'Spain',
+    'IT': 'Italy',
+    // Add more as needed
+  };
+  
+  return code ? countryNames[code] || code : 'Unknown';
 }
 
 /**
