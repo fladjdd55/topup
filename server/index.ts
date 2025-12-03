@@ -1,5 +1,4 @@
 import dotenv from 'dotenv';
-import { startRetryJob } from './jobs/retryHandler';
 // ✅ CRITICAL: Load environment variables BEFORE importing any other files
 dotenv.config({ override: true });
 
@@ -7,10 +6,16 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { wsManager } from "./websocket";
-// ✅ Import bot AFTER dotenv is loaded so config works
+import { startRetryJob } from './jobs/retryHandler';
 import { startTelegramBot } from './telegramBot';
+import helmet from "helmet";
 
 const app = express();
+
+app.use(helmet({
+  contentSecurityPolicy: false, // Disable CSP if it conflicts with Vite/Inline scripts
+  crossOriginEmbedderPolicy: false,
+}));
 
 // Conditionally apply global middleware
 app.use((req, res, next) => {
