@@ -211,11 +211,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use(passport.session());
 
   passport.serializeUser((user: any, done) => done(null, user.id));
+  
+  // ✅ FIXED: Robust deserialization to prevent "Failed to deserialize" crashes
   passport.deserializeUser(async (id: number, done) => {
     try {
       const user = await storage.getUser(id);
+      if (!user) {
+        // User not found in DB, invalidate session nicely
+        return done(null, false);
+      }
       done(null, user);
-    } catch (err) { done(err, null); }
+    } catch (err) {
+      console.error('[Passport] Deserialization Error:', err);
+      // On error, invalidate session instead of crashing request with 500
+      done(null, false); 
+    }
   });
 
   passport.use(new GoogleStrategy({
