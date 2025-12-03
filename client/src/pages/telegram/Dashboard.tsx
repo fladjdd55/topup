@@ -17,6 +17,8 @@ import type { RechargeRequest } from "@shared/schema";
 import { formatDistanceToNow } from "date-fns";
 import { enUS } from "date-fns/locale";
 import { useLanguage } from "@/contexts/LanguageContext"; 
+// ✅ Haptic Feedback Hook
+import { useTelegramHaptic } from "@/hooks/useTelegramHaptic";
 
 export default function TelegramDashboard() {
   const { user } = useAuth();
@@ -25,6 +27,9 @@ export default function TelegramDashboard() {
   const queryClient = useQueryClient();
   const [isAskModalOpen, setIsAskModalOpen] = useState(false);
   const { t } = useLanguage(); 
+  
+  // ✅ Initialize Haptics
+  const { trigger, notify, selection } = useTelegramHaptic();
 
   const dateLocale = enUS;
 
@@ -67,6 +72,8 @@ export default function TelegramDashboard() {
       });
     },
     onSuccess: () => {
+      // ✅ Haptic Success
+      notify('success');
       toast({ title: t('toast.request_sent') });
       setIsAskModalOpen(false);
       setNewRequest({ phoneNumber: user?.phone || '', amount: '', message: '', receiverPhone: '' });
@@ -77,6 +84,8 @@ export default function TelegramDashboard() {
       if (tg) tg.MainButton.hide();
     },
     onError: (error: Error) => {
+      // ✅ Haptic Error
+      notify('error');
       toast({ variant: 'destructive', title: t('toast.error'), description: error.message });
       // Re-enable button on error
       const tg = (window as any).Telegram?.WebApp;
@@ -91,15 +100,19 @@ export default function TelegramDashboard() {
     if (createRequestMutation.isPending) return;
 
     if (!currentData.amount || !currentData.receiverPhone) {
+      notify('error'); // Haptic feedback on validation error
       toast({ variant: 'destructive', title: t('toast.error'), description: t('payment.form_validation_error') });
       return;
     }
     
+    // Trigger impact when starting the request
+    trigger('medium');
+
     const tg = (window as any).Telegram?.WebApp;
     if (tg) tg.MainButton.showProgress(true);
     
     createRequestMutation.mutate(currentData);
-  }, [createRequestMutation, toast, t]);
+  }, [createRequestMutation, toast, t, notify, trigger]);
 
   // ✅ TELEGRAM MAIN BUTTON INTEGRATION
   useEffect(() => {
@@ -121,9 +134,10 @@ export default function TelegramDashboard() {
       mainButton.offClick(handleCreateRequest);
       mainButton.hide();
     };
-  }, [isAskModalOpen, t, handleCreateRequest]); // Added handleCreateRequest to dependencies
+  }, [isAskModalOpen, t, handleCreateRequest]); 
 
   const copyLink = async (code: string) => {
+    trigger('light'); // Haptic on copy
     const url = `${window.location.origin}/request/${code}`;
     await navigator.clipboard.writeText(url);
     toast({ title: t('toast.copied') });
@@ -153,7 +167,10 @@ export default function TelegramDashboard() {
           </div>
           <div 
             className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold cursor-pointer"
-            onClick={() => setLocation("/dashboard/profile")}
+            onClick={() => {
+              trigger('light');
+              setLocation("/dashboard/profile");
+            }}
           >
             {user?.firstName?.charAt(0) || "U"}
           </div>
@@ -168,14 +185,20 @@ export default function TelegramDashboard() {
               <Button 
                 size="sm" 
                 className="bg-white/20 hover:bg-white/30 text-white border-0 backdrop-blur-sm h-8 text-xs px-3"
-                onClick={() => setLocation("/dashboard/recharge")}
+                onClick={() => {
+                  trigger('light');
+                  setLocation("/dashboard/recharge");
+                }}
               >
                 <Plus className="mr-1 h-3 w-3" /> {t('favorites.add')}
               </Button>
               <Button 
                 size="sm" 
                 className="bg-white text-[#24A1DE] hover:bg-gray-50 border-0 h-8 text-xs px-3"
-                onClick={() => setLocation("/dashboard/recharge")}
+                onClick={() => {
+                  trigger('light');
+                  setLocation("/dashboard/recharge");
+                }}
               >
                 <Zap className="mr-1 h-3 w-3 fill-current" /> {t('dashboard.recharge')}
               </Button>
@@ -193,7 +216,10 @@ export default function TelegramDashboard() {
           {/* Recharge Mobile */}
           <Card 
             className="border-0 shadow-sm active:scale-95 transition-transform cursor-pointer bg-card"
-            onClick={() => setLocation("/dashboard/recharge")}
+            onClick={() => {
+              trigger('light');
+              setLocation("/dashboard/recharge");
+            }}
           >
             <CardContent className="p-3 flex flex-col items-center justify-center text-center gap-2 h-full">
               <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
@@ -204,7 +230,13 @@ export default function TelegramDashboard() {
           </Card>
 
           {/* Ask a Friend Modal Trigger */}
-          <Dialog open={isAskModalOpen} onOpenChange={setIsAskModalOpen}>
+          <Dialog 
+            open={isAskModalOpen} 
+            onOpenChange={(open) => {
+              if (open) trigger('light');
+              setIsAskModalOpen(open);
+            }}
+          >
             <DialogTrigger asChild>
               <Card className="border-0 shadow-sm active:scale-95 transition-transform cursor-pointer bg-card">
                 <CardContent className="p-3 flex flex-col items-center justify-center text-center gap-2 h-full">
@@ -262,7 +294,10 @@ export default function TelegramDashboard() {
           {/* Gift (Send Recharge) */}
           <Card 
             className="border-0 shadow-sm active:scale-95 transition-transform cursor-pointer bg-card"
-            onClick={() => setLocation("/send-recharge")}
+            onClick={() => {
+              trigger('light');
+              setLocation("/send-recharge");
+            }}
           >
             <CardContent className="p-3 flex flex-col items-center justify-center text-center gap-2 h-full">
               <div className="h-8 w-8 rounded-full bg-pink-100 flex items-center justify-center text-pink-600">
@@ -279,7 +314,8 @@ export default function TelegramDashboard() {
       <div>
         <h3 className="text-xs font-semibold text-muted-foreground mb-3 uppercase tracking-wider">{t('dashboard.requests')}</h3>
         
-        <Tabs defaultValue="received" className="w-full">
+        {/* ✅ Tab Selection Haptic */}
+        <Tabs defaultValue="received" className="w-full" onValueChange={() => selection()}>
           <TabsList className="grid w-full grid-cols-2 mb-4 h-9">
             <TabsTrigger value="received" className="text-xs">{t('requests.received')} {receivedRequests?.filter(r => r.status === 'pending').length ? `(${receivedRequests.filter(r => r.status === 'pending').length})` : ''}</TabsTrigger>
             <TabsTrigger value="sent" className="text-xs">{t('requests.sent')}</TabsTrigger>
@@ -324,7 +360,10 @@ export default function TelegramDashboard() {
                         <Button 
                           size="sm" 
                           className="flex-1 h-8 text-xs"
-                          onClick={() => setLocation(`/request/${req.requestCode}`)}
+                          onClick={() => {
+                            trigger('light');
+                            setLocation(`/request/${req.requestCode}`);
+                          }}
                         >
                           {t('requests.pay_now')}
                         </Button>
@@ -351,7 +390,15 @@ export default function TelegramDashboard() {
             ) : sentRequests?.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground text-xs bg-muted/30 rounded-xl">
                 {t('requests.no_sent')} <br/>
-                <span className="text-primary cursor-pointer" onClick={() => setIsAskModalOpen(true)}>{t('requests.new_request')} ?</span>
+                <span 
+                  className="text-primary cursor-pointer" 
+                  onClick={() => {
+                    trigger('light');
+                    setIsAskModalOpen(true);
+                  }}
+                >
+                  {t('requests.new_request')} ?
+                </span>
               </div>
             ) : (
               sentRequests?.map((req) => (
