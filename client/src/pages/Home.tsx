@@ -9,10 +9,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useTelegramAuth } from "@/hooks/useTelegramAuth";
 import { 
   Smartphone, Shield, History, Headset, CheckCircle, Gift,
-  Menu, X, Globe, Zap, Quote, ChevronLeft, ChevronRight, Star
+  Menu, X, Globe, Zap, ChevronRight
 } from "lucide-react";
-// ✅ IMPORT RECHARGE FORM
-import { RechargeForm } from '@/components/RechargeForm';
+import { RechargeForm } from '@/components/RechargeForm'; // ✅ Imported Reusable Form
 import { exceedsGuestLimit } from "@shared/currencyUtils";
 
 const features = [
@@ -32,15 +31,6 @@ export default function Home() {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [currentTestimonial, setCurrentTestimonial] = useState(0);
-
-  // Auto-play testimonial slider
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTestimonial((prev) => (prev + 1) % 3);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, []);
 
   const scrollToRecharge = () => {
     const rechargeSection = document.getElementById('recharge-section');
@@ -50,7 +40,7 @@ export default function Home() {
     setMobileMenuOpen(false);
   };
 
-  // ✅ SIMPLE STRIPE HANDLER FOR HOME PAGE
+  // ✅ Simple Stripe Handler for Homepage
   const handleQuickRecharge = async (phone: string, amount: number) => {
     // Check limits
     if (!user && exceedsGuestLimit(amount, 'USD')) {
@@ -77,15 +67,15 @@ export default function Home() {
       } else {
         throw new Error(data.message || 'Error creating checkout');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Recharge error:', error);
-      alert('Une erreur est survenue. Veuillez réessayer.');
+      alert(error.message || 'Une erreur est survenue.');
     }
   };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Navigation - HIDDEN IF INSIDE TELEGRAM */}
+      {/* Navigation */}
       {!isTelegram && (
         <nav className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-md shadow-sm border-b border-gray-200/50 dark:border-gray-700/50 sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-4 lg:px-6">
@@ -150,7 +140,6 @@ export default function Home() {
               </div>
             </div>
             
-            {/* Right side floating cards */}
             <div className="lg:col-span-5 hidden lg:block">
               <div className="space-y-6">
                 <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 animate-float">
@@ -179,10 +168,9 @@ export default function Home() {
 
           <Card className="border border-gray-200 dark:border-gray-700 shadow-xl">
             <CardContent className="p-8">
-              {/* ✅ DIRECT RECHARGE FORM */}
-              <RechargeForm 
-                onSubmit={handleQuickRecharge} 
-              />
+              {/* ✅ USING SHARED FORM */}
+              <RechargeForm onSubmit={handleQuickRecharge} />
+              
               <div className="mt-4 text-center text-sm text-gray-500">
                 <Shield className="w-4 h-4 inline mr-1" />
                 Paiement sécurisé par Stripe

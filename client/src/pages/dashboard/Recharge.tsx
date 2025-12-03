@@ -12,8 +12,7 @@ import { isAmountValid, getMinimumAmountMessage } from '@shared/currencyRates';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { getSendRechargeTranslation } from '@/translations/sendRecharge';
 import { useTelegramAuth } from "@/hooks/useTelegramAuth";
-// ✅ Import the reusable form
-import { RechargeForm } from '@/components/RechargeForm';
+import { RechargeForm } from '@/components/RechargeForm'; // ✅ Imported Reusable Form
 
 export default function Recharge() {
   const { t, language } = useLanguage();
@@ -84,7 +83,6 @@ export default function Recharge() {
       return res.json();
     },
     onSuccess: (data) => {
-      // Cleanup storage
       sessionStorage.removeItem('prefilledRechargeData');
       sessionStorage.removeItem('initialRecharge');
       if (data.url) window.location.href = data.url;
@@ -130,7 +128,6 @@ export default function Recharge() {
   const handleRechargeSubmit = async (phoneNumber: string, amount: number) => {
     const currency = 'USD'; // Default currency for logic checks
 
-    // 1. Validation Logic
     if (amount <= 0) {
       toast({ variant: 'destructive', title: 'Montant invalide', description: 'Le montant doit être positif' });
       return;
@@ -157,9 +154,9 @@ export default function Recharge() {
       return;
     }
 
-    // 2. Execute Payment
     const payload = { amount: amount.toString(), phoneNumber, currency };
     
+    // Choose the correct payment method based on environment
     if (isTelegram) {
       await createTelegramInvoiceMutation.mutateAsync(payload);
     } else {
@@ -168,8 +165,7 @@ export default function Recharge() {
   };
 
   const handleFavoriteClick = (favorite: Favorite) => {
-    // Update the form by changing the initialData key or value
-    setInitialData({ phone: favorite.phoneNumber, amount: '10' }); // Default amount for favorites
+    setInitialData({ phone: favorite.phoneNumber, amount: '10' });
   };
 
   const isSubmitting = createCheckoutSessionMutation.isPending || createTelegramInvoiceMutation.isPending;
@@ -222,7 +218,7 @@ export default function Recharge() {
         </Card>
       )}
 
-      {/* Recharge Form Section */}
+      {/* Main Recharge Form */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -232,15 +228,13 @@ export default function Recharge() {
           <CardDescription>{t('recharge_page.enter_number_amount')}</CardDescription>
         </CardHeader>
         <CardContent>
-          {/* ✅ USING THE SHARED RECHARGE FORM */}
-          {/* Ensure RechargeForm accepts 'key' to reset state when favorites change */}
+          {/* ✅ Using Shared Form Component */}
           <RechargeForm 
-            key={initialData?.phone} 
+            key={initialData?.phone} // Forces reset when a favorite is clicked
             onSubmit={handleRechargeSubmit} 
             isSubmitting={isSubmitting}
-            // If you updated RechargeForm to accept default props:
-            // defaultPhone={initialData?.phone}
-            // defaultAmount={initialData?.amount}
+            defaultPhone={initialData?.phone}
+            defaultAmount={initialData?.amount}
           />
         </CardContent>
       </Card>
