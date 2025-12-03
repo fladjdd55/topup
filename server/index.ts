@@ -6,8 +6,8 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { wsManager } from "./websocket";
-import { startRetryJob } from './jobs/retryHandler';
 import { startTelegramBot } from './telegramBot';
+import { startRetryJob } from './jobs/retryHandler';
 import helmet from "helmet";
 
 const app = express();
