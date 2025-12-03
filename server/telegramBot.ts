@@ -10,13 +10,12 @@ import { BotContext } from './types/telegram.types';
 import { validatePhoneNumber, sanitizeInput, validateAmount } from './utils/validators';
 import { middleware, getHealthStatus } from './middleware/telegramMiddleware';
 
-// Initialize
-const bot = new Telegraf<BotContext>(botConfig.token);
+// ✅ EXPORT BOT INSTANCE (Required for Webhook in routes.ts)
+export const bot = new Telegraf<BotContext>(botConfig.token);
 
 // ✅ APPLY MIDDLEWARE
 bot.use(middleware.session);
 bot.use(middleware.floodProtection);
-bot.use(middleware.session);
 bot.use(middleware.analytics);
 
 // ============================================================================
@@ -317,13 +316,37 @@ bot.on('successful_payment', async (ctx) => {
 });
 
 // ============================================================================
-// STARTUP
+// STARTUP LOGIC (Webhooks vs Polling)
 // ============================================================================
-export function startTelegramBot() {
-  if (!botConfig.token) return console.error('BOT_TOKEN missing');
+export async function startTelegramBot() {
+  if (!botConfig.token) return console.error('❌ BOT_TOKEN missing');
+
+  // ✅ PROD: Set Webhook (Secure)
+  // We use Webhook if we are in production AND a domain is configured
+  if (process.env.NODE_ENV === 'production' && botConfig.webhookDomain) {
+    try {
+      const webhookUrl = `${botConfig.webhookDomain}/api/webhooks/telegram`;
+      
+      // 🔒 SECRET TOKEN VALIDATION:
+      // This ensures that only Telegram can call your webhook endpoint.
+      await bot.telegram.setWebhook(webhookUrl, {
+        secret_token: botConfig.webhookSecret 
+      });
+      
+      console.log(`🚀 [Telegram] Webhook set to: ${webhookUrl}`);
+      console.log(`🔒 [Telegram] Secure Token Validation Enabled`);
+    } catch (err) {
+      console.error('❌ [Telegram] Failed to set Webhook:', err);
+    }
+  } 
+  // ✅ DEV: Long Polling (Easy)
+  else {
+    console.log('🔄 [Telegram] Starting Long Polling (Dev Mode)...');
+    // We launch the bot without webhook options, which defaults to polling
+    bot.launch().catch(err => console.error('❌ [Telegram] Launch failed:', err));
+  }
   
-  bot.launch().then(() => console.log('🤖 Bot started (Production + Admin Mode)'));
-  
+  // Graceful Shutdown
   process.once('SIGINT', () => bot.stop('SIGINT'));
   process.once('SIGTERM', () => bot.stop('SIGTERM'));
 }

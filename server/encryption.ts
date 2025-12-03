@@ -10,8 +10,16 @@ function getEncryptionKey(): string {
   const key = process.env.ENCRYPTION_KEY;
   
   if (!key) {
-    console.warn('⚠️ [Encryption] ENCRYPTION_KEY not set in environment variables. Using default key (NOT SECURE FOR PRODUCTION)');
-    // In production, you MUST set a strong ENCRYPTION_KEY in your Replit Secrets
+    // 🛑 CRITICAL: STOP THE APP IN PRODUCTION
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(
+        '❌ FATAL ERROR: ENCRYPTION_KEY is missing in production. ' +
+        'The application cannot start securely. Please set this variable.'
+      );
+    }
+
+    // Only allow this insecure fallback in local development
+    console.warn('⚠️ [Encryption] ENCRYPTION_KEY not set. Using INSECURE default for DEVELOPMENT ONLY.');
     return 'default-encryption-key-change-me-in-production-must-be-at-least-32-chars-long';
   }
   

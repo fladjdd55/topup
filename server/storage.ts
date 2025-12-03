@@ -1,5 +1,5 @@
 import { db } from "./db";
-import { eq, desc, and, sql, or, count, isNull } from "drizzle-orm";
+import { eq, desc, and, sql, or, count, isNull, lt, lte } from "drizzle-orm"; // ✅ Added lt, lte
 import { 
   users, transactions, favorites, operators, rechargeRequests, notifications,
   stripeCustomers, passwordResetTokens, currencies, recurringRecharges,
@@ -68,7 +68,7 @@ export interface IStorage {
   deleteRechargeRequest(id: number): Promise<void>;
   getPendingRequestsCount(userId: number): Promise<number>;
   
-  // ✅ NEW METHOD FOR LINKING
+  // Link
   linkPendingRequestsToUser(userId: number, phone: string): Promise<void>;
 
   // Notifications
@@ -191,7 +191,19 @@ export class DatabaseStorage implements IStorage {
   async getAllTransactions(limit = 100) { return db.select().from(transactions).orderBy(desc(transactions.createdAt)).limit(limit); }
   async createTransaction(t: InsertTransaction) { const [newT] = await db.insert(transactions).values(t).returning(); return newT; }
   async updateTransaction(id: number, data: Partial<Transaction>) { const [t] = await db.update(transactions).set({ ...data, updatedAt: new Date().toISOString() }).where(eq(transactions.id, id)).returning(); return t; }
-  async getExpiredPendingConfirmations(time: string) { return db.select().from(transactions).where(sql`${transactions.status} = 'pending_confirmation' AND ${transactions.confirmationDeadline} < ${time}`); }
+  
+  // ✅ FIX: Replaced raw SQL with Drizzle Query Builder
+  async getExpiredPendingConfirmations(time: string) { 
+    return db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.status, 'pending_confirmation'),
+          lt(transactions.confirmationDeadline, time)
+        )
+      ); 
+  }
   
   async getDashboardStats(userId: number) {
     const txs = await this.getTransactionsByUserId(userId);
@@ -252,7 +264,6 @@ export class DatabaseStorage implements IStorage {
   async deleteRechargeRequest(id: number) { await db.delete(rechargeRequests).where(eq(rechargeRequests.id, id)); }
   async getPendingRequestsCount(uid: number) { const [c] = await db.select({ count: count() }).from(rechargeRequests).where(and(eq(rechargeRequests.recipientUserId, uid), eq(rechargeRequests.status, 'pending'))); return c?.count || 0; }
 
-  // ✅ FIXED: Robust linking with multiple phone number format checks
   async linkPendingRequestsToUser(userId: number, phone: string) {
     if (!phone) return;
     
@@ -260,7 +271,6 @@ export class DatabaseStorage implements IStorage {
     let cleanPhone = phone.replace(/[^\d+]/g, '');
     if (!cleanPhone.startsWith('+')) cleanPhone = '+' + cleanPhone;
     
-    // Check variations (some requests might have been created with different formats)
     const phoneVariations = [
       cleanPhone,
       cleanPhone.replace('+', ''), // without +
@@ -324,7 +334,20 @@ export class DatabaseStorage implements IStorage {
   async getRecurringRecharge(id: number) { const [r] = await db.select().from(recurringRecharges).where(eq(recurringRecharges.id, id)); return r; }
   async getRecurringRechargesByUserId(uid: number) { return db.select().from(recurringRecharges).where(eq(recurringRecharges.userId, uid)).orderBy(desc(recurringRecharges.createdAt)); }
   async getActiveRecurringRecharges() { return db.select().from(recurringRecharges).where(eq(recurringRecharges.isActive, true)); }
-  async getPendingRecurringRecharges() { return db.select().from(recurringRecharges).where(and(eq(recurringRecharges.isActive, true), sql`${recurringRecharges.nextExecutionDate} <= ${new Date().toISOString()}`)); }
+  
+  // ✅ FIX: Also secured recurring recharges query
+  async getPendingRecurringRecharges() { 
+    return db
+      .select()
+      .from(recurringRecharges)
+      .where(
+        and(
+          eq(recurringRecharges.isActive, true),
+          lte(recurringRecharges.nextExecutionDate, new Date().toISOString())
+        )
+      ); 
+  }
+
   async createRecurringRecharge(r: InsertRecurringRecharge) { const [nr] = await db.insert(recurringRecharges).values(r).returning(); return nr; }
   async updateRecurringRecharge(id: number, d: Partial<RecurringRecharge>) { const [r] = await db.update(recurringRecharges).set({ ...d, updatedAt: new Date().toISOString() }).where(eq(recurringRecharges.id, id)).returning(); return r; }
   async deleteRecurringRecharge(id: number) { await db.delete(recurringRecharges).where(eq(recurringRecharges.id, id)); }

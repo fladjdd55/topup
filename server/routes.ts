@@ -22,8 +22,11 @@ import { convertToUSD } from "@shared/currencyRates";
 import bodyParser from "body-parser";
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-// ✅ IMPORT TELEGRAM HELPERS
-import { sendTelegramNotification, createTelegramInvoiceLink } from "./telegramBot";
+import { parsePhoneNumber, CountryCode } from 'libphonenumber-js';
+
+// ✅ IMPORT TELEGRAM BOT & CONFIG
+import { bot, sendTelegramNotification, createTelegramInvoiceLink } from "./telegramBot";
+import { botConfig } from "./config/bot.config";
 
 // ==================== CONFIGURATION ====================
 
@@ -38,23 +41,30 @@ declare module 'express-session' {
   }
 }
 
-// Fee calculation constants
-const DINGCONNECT_COMMISSION_RATE = 0.09; // 9%
-const STRIPE_FEE_RATE = 0.03; // 3%
-const PROFIT_MARGIN = 0.03; // 3%
+// ✅ DYNAMIC CONFIGURATION (No Hardcoding)
+const DINGCONNECT_COMMISSION_RATE = parseFloat(process.env.COMMISSION_PROVIDER_RATE || '0.09'); 
+const STRIPE_FEE_RATE = parseFloat(process.env.COMMISSION_STRIPE_RATE || '0.03'); 
+const PROFIT_MARGIN = parseFloat(process.env.COMMISSION_PROFIT_MARGIN || '0.03');
+const DEFAULT_COUNTRY = (process.env.DEFAULT_COUNTRY_ISO || 'HT') as CountryCode;
 
 function calculateCommission(amount: number | string): number {
   const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
   const totalWithFees = (numAmount * (1 + DINGCONNECT_COMMISSION_RATE)) / (1 - STRIPE_FEE_RATE - PROFIT_MARGIN);
-  // ✅ FIXED: Missing variable definition
   const commission = totalWithFees - numAmount;
   return parseFloat(commission.toFixed(2));
 }
 
+// ✅ ROBUST PHONE VALIDATION
 function normalizePhoneNumber(phone: string): string {
-  let cleaned = phone.replace(/[^\d+]/g, '');
-  if (!cleaned.startsWith('+')) cleaned = '+' + cleaned;
-  return cleaned;
+  try {
+    const phoneNumber = parsePhoneNumber(phone, DEFAULT_COUNTRY); 
+    if (!phoneNumber || !phoneNumber.isValid()) {
+      throw new Error('Numéro de téléphone invalide');
+    }
+    return phoneNumber.number;
+  } catch (error) {
+    throw new Error(`Format de numéro invalide: ${phone}`);
+  }
 }
 
 function getBaseUrl(req: Request): string {
@@ -76,6 +86,14 @@ const generalLimiter = rateLimit({
   message: 'Trop de requêtes. Veuillez patienter.',
 });
 
+const paymentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  message: { message: 'Trop de tentatives de paiement. Veuillez patienter 15 minutes.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // ==================== MAIN FUNCTION ====================
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -88,7 +106,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   initEmailService();
 
-  // 3. Special Route Parsing (MUST BE FIRST)
+  // ==================== WEBHOOKS ====================
+
+  // 1. Stripe Webhook (Must be first, needs raw body)
   app.post('/api/webhooks/stripe', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
     const sig = req.headers['stripe-signature'];
     const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -107,6 +127,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ received: true });
   });
 
+  // 2. ✅ TELEGRAM WEBHOOK (Production Only)
+  // This validates the secret_token automatically
+  if (process.env.NODE_ENV === 'production' && botConfig.webhookDomain) {
+    app.use(
+      bot.webhookCallback('/api/webhooks/telegram', { 
+        secretToken: botConfig.webhookSecret 
+      })
+    );
+  }
+
+  // ==================== GLOBAL MIDDLEWARE ====================
+  
   app.use(bodyParser.json({ limit: '10mb' }));
   app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -129,7 +161,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     })
   );
 
-  // ==================== STRIPE FULFILLMENT ====================
+  // ==================== STRIPE FULFILLMENT LOGIC ====================
+  
   async function handleStripeFulfillment(session: Stripe.Checkout.Session) {
     const { metadata, payment_intent } = session;
     if (!metadata || !metadata.phoneNumber || !metadata.baseAmountUSD) return;
@@ -166,6 +199,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const dingResult = await sendRecharge(phoneNumber, amountUSD, transactionId, 'HT');
 
       if (dingResult.ResultCode === 1) {
+        // Success
         await storage.updateTransaction(transaction.id, {
           status: 'completed',
           dtoneExternalId: dingResult.TransferRecord?.TransferId?.TransferRef || null,
@@ -186,11 +220,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (userId) {
           wsManager.sendToUser(userId, 'transaction_completed', { transactionId: transaction.id });
-          
-          // ✅ TELEGRAM NOTIFICATION
           const user = await storage.getUser(userId);
           if (user && user.telegramId) {
-            sendTelegramNotification(user.telegramId, `✅ Top-up Successful!!! Ref: ${transactionId}`);
+            sendTelegramNotification(user.telegramId, `✅ Recharge réussie ! Ref: ${transactionId}`);
           }
         }
         
@@ -199,9 +231,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
     } catch (error: any) {
+      // ✅ "PAID BUT FAILED" LOGIC
+      console.error('[Fulfillment CRITICAL FAILURE]', error);
+
       if (intentId) {
         const failedTx = await storage.getTransactionByStripeIntentId(intentId);
-        if (failedTx) await storage.updateTransaction(failedTx.id, { status: 'failed', dtoneStatus: error.message });
+        
+        if (failedTx) {
+          await storage.updateTransaction(failedTx.id, { 
+            status: 'failed',
+            dtoneStatus: `ERROR: ${error.message}`,
+            failureReason: 'Paiement réussi, échec recharge fournisseur',
+            metadata: { 
+              ...(failedTx.metadata as object), 
+              needs_manual_action: true,
+              error_log: error.message,
+              failed_at: new Date().toISOString()
+            }
+          });
+
+          if (userId) {
+            await storage.createNotification({
+              userId,
+              title: '⚠️ Action Requise : Échec technique',
+              message: `Votre paiement a été validé mais l'opérateur n'a pas répondu. Ne vous inquiétez pas, votre argent est en sécurité. Notre équipe va réessayer manuellement ou vous rembourser.`,
+              type: 'error'
+            });
+
+            wsManager.sendToUser(userId, 'transaction_update', { 
+              transactionId: failedTx.id,
+              status: 'failed',
+              message: "Paiement reçu mais recharge en attente de validation manuelle."
+            });
+            
+            const user = await storage.getUser(userId);
+            if (user?.telegramId) {
+               sendTelegramNotification(user.telegramId, `⚠️ Problème technique sur votre recharge. Support contacté.`);
+            }
+          }
+
+          if (process.env.ADMIN_TELEGRAM_ID) {
+            sendTelegramNotification(process.env.ADMIN_TELEGRAM_ID, `🚨 URGENT: PAID BUT FAILED\nTx: ${failedTx.transactionId}\nUser: ${userId || 'Guest'}\nAmt: $${amountUSD}\nErr: ${error.message}`);
+          }
+        }
       }
     }
   }
@@ -212,19 +284,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   passport.serializeUser((user: any, done) => done(null, user.id));
   
-  // ✅ FIXED: Robust deserialization to prevent "Failed to deserialize" crashes
   passport.deserializeUser(async (id: number, done) => {
     try {
       const user = await storage.getUser(id);
       if (!user) {
-        // User not found in DB, invalidate session nicely
+        console.warn(`[Passport] Session exists for invalid user ID: ${id}`);
         return done(null, false);
       }
       done(null, user);
     } catch (err) {
-      console.error('[Passport] Deserialization Error:', err);
-      // On error, invalidate session instead of crashing request with 500
-      done(null, false); 
+      console.error('[Passport] Deserialization Database Error:', err);
+      done(err);
     }
   });
 
@@ -253,16 +323,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ==================== API ROUTES ====================
 
-  // ✅ TELEGRAM CREATE INVOICE
-  app.post('/api/telegram/create-invoice', requireAuth, async (req, res) => {
+  // ✅ TELEGRAM INVOICE (With Rate Limit & Validation)
+  app.post('/api/telegram/create-invoice', paymentLimiter, requireAuth, async (req, res) => {
     try {
       const { amount, phoneNumber, currency = 'USD' } = req.body;
       if (!amount || !phoneNumber) return res.status(400).json({ message: 'Données manquantes' });
 
-      const validation = validatePhoneNumber(phoneNumber);
-      if (!validation.isValid) return res.status(400).json({ message: 'Numéro invalide' });
-      
-      const cleanPhoneNumber = validation.fullNumber || normalizePhoneNumber(phoneNumber);
+      let cleanPhoneNumber;
+      try {
+        cleanPhoneNumber = normalizePhoneNumber(phoneNumber);
+      } catch (e: any) {
+        return res.status(400).json({ message: e.message });
+      }
+
       const numAmount = parseFloat(amount);
       const amountInUSD = convertToUSD(numAmount, currency);
       const commission = calculateCommission(amountInUSD);
@@ -279,7 +352,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         commission: commission.toString(),
         totalReceived: totalAmount.toString(), 
         totalReceivedUsd: totalAmount.toString(),
-        operatorCode: validation.operator || 'UNKNOWN',
+        operatorCode: 'UNKNOWN',
         paymentMethod: 'telegram_native',
         status: 'pending', 
         currency: currency,
@@ -294,29 +367,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Stripe & Auth Routes
   app.get('/api/config/stripe-key', (req, res) => res.json({ publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || '' }));
   
-  app.post('/api/stripe/create-checkout-session', async (req, res) => {
+  // ✅ STRIPE CHECKOUT (With Rate Limit & Validation)
+  app.post('/api/stripe/create-checkout-session', paymentLimiter, async (req, res) => {
     try {
       const { amount, phoneNumber, currency = 'USD', requestCode, recurringRechargeId } = req.body;
       if (!amount || !phoneNumber) return res.status(400).json({ message: 'Données manquantes' });
-      const validation = validatePhoneNumber(phoneNumber);
-      if (!validation.isValid) return res.status(400).json({ message: 'Numéro invalide' });
-      const cleanPhoneNumber = validation.fullNumber || normalizePhoneNumber(phoneNumber);
+      
+      let cleanPhoneNumber;
+      try {
+        cleanPhoneNumber = normalizePhoneNumber(phoneNumber);
+      } catch (e: any) {
+        return res.status(400).json({ message: "Numéro de téléphone invalide (format international requis)" });
+      }
+
+      const validation = validatePhoneNumber(cleanPhoneNumber);
+      if (!validation.isValid) return res.status(400).json({ message: 'Numéro invalide pour la recharge' });
+
       const numAmount = parseFloat(amount);
       const amountInUSD = convertToUSD(numAmount, currency);
       const commission = calculateCommission(amountInUSD);
       const totalAmount = parseFloat((amountInUSD + commission).toFixed(2));
       const baseUrl = getBaseUrl(req);
+      
       const session = await stripe.checkout.sessions.create({
         mode: 'payment',
         payment_method_types: ['card'],
         customer_email: req.session.userId ? (await storage.getUser(req.session.userId))?.email || undefined : undefined,
-        line_items: [{ price_data: { currency: 'usd', product_data: { name: `Recharge Mobile (${validation.country})`, description: `${amount} ${currency} pour ${cleanPhoneNumber}` }, unit_amount: Math.round(totalAmount * 100) }, quantity: 1 }],
+        line_items: [{ 
+          price_data: { 
+            currency: 'usd', 
+            product_data: { 
+              name: `Recharge Mobile (${validation.country})`, 
+              description: `${amount} ${currency} pour ${cleanPhoneNumber}` 
+            }, 
+            unit_amount: Math.round(totalAmount * 100) 
+          }, 
+          quantity: 1 
+        }],
         success_url: `${baseUrl}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${baseUrl}/dashboard/recharge?canceled=true`,
-        metadata: { userId: req.session.userId?.toString() || 'guest', phoneNumber: cleanPhoneNumber, operatorCode: validation.operator || 'UNKNOWN', baseAmount: amount.toString(), baseCurrency: currency, baseAmountUSD: amountInUSD.toString(), commission: commission.toString(), totalWithCommission: totalAmount.toString(), requestCode: requestCode || '', recurringRechargeId: recurringRechargeId?.toString() || '' },
+        metadata: { 
+          userId: req.session.userId?.toString() || 'guest', 
+          phoneNumber: cleanPhoneNumber, 
+          operatorCode: validation.operator || 'UNKNOWN', 
+          baseAmount: amount.toString(), 
+          baseCurrency: currency, 
+          baseAmountUSD: amountInUSD.toString(), 
+          commission: commission.toString(), 
+          totalWithCommission: totalAmount.toString(), 
+          requestCode: requestCode || '', 
+          recurringRechargeId: recurringRechargeId?.toString() || '' 
+        },
       });
       res.json({ url: session.url });
     } catch (error: any) { res.status(500).json({ message: error.message }); }
@@ -344,10 +447,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (data.email && await storage.getUserByEmail(data.email)) return res.status(400).json({ message: 'Email déjà utilisé' });
       const hashedPassword = await bcrypt.hash(data.password, 10);
       const user = await storage.createUser({ ...data, password: hashedPassword });
-      req.session.userId = user.id;
-      if (data.phone) storage.linkPendingRequestsToUser(user.id, data.phone).catch(console.error);
-      const { password, ...u } = user;
-      res.json({ user: u });
+      
+      req.session.regenerate((err) => {
+        if (err) return res.status(500).json({ message: 'Erreur session' });
+        req.session.userId = user.id;
+        if (data.phone) storage.linkPendingRequestsToUser(user.id, data.phone).catch(console.error);
+        const { password, ...u } = user;
+        res.json({ user: u });
+      });
+      
     } catch (error) { if (error instanceof z.ZodError) return res.status(400).json({ message: error.errors[0].message }); res.status(500).json({ message: 'Erreur inscription' }); }
   });
 
@@ -356,9 +464,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { identifier, password } = loginSchema.parse(req.body);
       const user = await storage.getUserByIdentifier(identifier);
       if (!user || !user.password || !(await bcrypt.compare(password, user.password))) return res.status(401).json({ message: 'Identifiants incorrects' });
-      req.session.userId = user.id;
-      if (user.phone) storage.linkPendingRequestsToUser(user.id, user.phone).catch(console.error);
-      req.session.save(() => { const { password: _, ...u } = user; res.json({ user: u }); });
+      
+      req.session.regenerate((err) => {
+        if (err) return res.status(500).json({ message: 'Erreur session' });
+        req.session.userId = user.id;
+        if (user.phone) storage.linkPendingRequestsToUser(user.id, user.phone).catch(console.error);
+        req.session.save(() => { const { password: _, ...u } = user; res.json({ user: u }); });
+      });
+
     } catch (error) { res.status(500).json({ message: 'Erreur connexion' }); }
   });
 
@@ -368,7 +481,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
       if (!BOT_TOKEN) return res.status(500).json({ message: "Bot token not configured" });
       let userData: any = null; let telegramId: string = "";
-      // Validate initData...
+      
       if (initData) {
         const urlParams = new URLSearchParams(initData);
         const hash = urlParams.get('hash'); urlParams.delete('hash');
@@ -377,7 +490,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex') !== hash) return res.status(403).json({ message: "Invalid Mini App signature" });
         userData = JSON.parse(urlParams.get('user')!); telegramId = userData.id.toString();
       } else if (widgetData) {
-        // ... (widget validation) ...
         const { hash, ...data } = widgetData;
         const dataCheckString = Object.keys(data).sort().map(key => `${key}=${data[key]}`).join('\n');
         const secretKey = crypto.createHash('sha256').update(BOT_TOKEN).digest();
@@ -391,9 +503,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const hashedPassword = await bcrypt.hash(crypto.randomBytes(16).toString('hex'), 10);
         user = await storage.createUser({ telegramId, firstName: userData.first_name, lastName: userData.last_name || '', username: userData.username || `user_${telegramId}`, email: randomEmail, password: hashedPassword, phone: null as any, profilePicture: userData.photo_url || null, role: 'user' });
       }
-      req.session.userId = user.id;
-      if (user.phone) storage.linkPendingRequestsToUser(user.id, user.phone).catch(console.error);
-      req.session.save(() => { const { password, ...u } = user!; res.json({ user: u }); });
+      
+      req.session.regenerate((err) => {
+        if (err) return res.status(500).json({ message: 'Erreur session' });
+        req.session.userId = user!.id;
+        if (user!.phone) storage.linkPendingRequestsToUser(user!.id, user!.phone).catch(console.error);
+        req.session.save(() => { const { password, ...u } = user!; res.json({ user: u }); });
+      });
+
     } catch (error) { res.status(500).json({ message: "Login failed" }); }
   });
 
@@ -409,7 +526,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) { res.status(500).json({ message: 'Mise à jour échouée' }); }
   });
 
-  // Request Routes
   app.get('/api/recharge-requests', requireAuth, async (req, res) => { const requests = await storage.getRechargeRequestsByRecipientUserId(req.session.userId!); res.json(requests); });
   app.get('/api/recharge-requests/sent', requireAuth, async (req, res) => { const requests = await storage.getRechargeRequestsBySenderId(req.session.userId!); res.json(requests); });
   app.post('/api/recharge-requests', requireAuth, async (req, res) => {

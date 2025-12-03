@@ -1,4 +1,5 @@
 import dotenv from 'dotenv';
+import { startRetryJob } from './jobs/retryHandler';
 // ✅ CRITICAL: Load environment variables BEFORE importing any other files
 dotenv.config({ override: true });
 
@@ -66,6 +67,8 @@ app.use((req, res, next) => {
   
   // Start Telegram Bot (Safe now that env vars are loaded)
   startTelegramBot();
+  // Start Background Jobs
+  startRetryJob();
 
   // Error Handler
   app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
