@@ -43,12 +43,11 @@ export default function Requests() {
   const [, setLocation] = useLocation();
   const { t, language } = useLanguage();
 
-  // ✅ FIX 1: Persist Active Tab (Prevents switching back to 'received' on resize/keyboard)
+  // ✅ FIX: Persist Active Tab so it doesn't disappear on reload/resize
   const [activeTab, setActiveTab] = useState(() => {
     return localStorage.getItem('requests_active_tab') || 'received';
   });
 
-  // Save tab whenever it changes
   useEffect(() => {
     localStorage.setItem('requests_active_tab', activeTab);
   }, [activeTab]);
@@ -56,7 +55,6 @@ export default function Requests() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const dateLocale = language === 'fr' ? fr : language === 'es' ? es : enUS;
 
-  // ... (Keep existing online/offline effect)
   useEffect(() => {
     const handleOnline = () => { setIsOnline(true); queryClient.invalidateQueries(); };
     const handleOffline = () => setIsOnline(false);
@@ -73,10 +71,8 @@ export default function Requests() {
   const [newRequestForm, setNewRequestForm] = useState({ phoneNumber: user?.phone || '', amount: '', message: '', senderName: '', receiverPhone: '' });
   const [detectedCurrency, setDetectedCurrency] = useState('USD');
 
-  // ... (Keep existing user phone sync effect)
   useEffect(() => { if (user?.phone && !newRequestForm.phoneNumber) setNewRequestForm(prev => ({ ...prev, phoneNumber: user.phone || '' })); }, [user]);
 
-  // ... (Keep existing currency detection effect)
   useEffect(() => {
     if (newRequestForm.phoneNumber) {
       const validation = validatePhoneNumber(newRequestForm.phoneNumber);
@@ -84,7 +80,6 @@ export default function Requests() {
     }
   }, [newRequestForm.phoneNumber]);
 
-  // Queries
   const { data: receivedRequests, isLoading: loadingReceived } = useQuery<RechargeRequest[]>({
     queryKey: ['/api/recharge-requests'], refetchInterval: 10000, retry: 3, staleTime: 5000,
   });
@@ -92,7 +87,6 @@ export default function Requests() {
     queryKey: ['/api/recharge-requests/sent'], refetchInterval: 10000,
   });
 
-  // Mutations (Keep existing mutations: accept, decline, cancel, delete, create)
   const clearActionLoading = (id: number) => {
     setActionLoading(prev => { const newState = { ...prev }; delete newState[id]; return newState; });
   };
@@ -168,7 +162,6 @@ export default function Requests() {
   });
 
   const validateField = (field: string, value: string) => {
-    // ... (Keep existing validation logic)
     const errors = { ...validationErrors };
     if (field === 'phoneNumber' || field === 'receiverPhone') {
       if (value) {
@@ -207,33 +200,26 @@ export default function Requests() {
     }
   };
 
-  // ✅ FIX 2: Copy Code Logic Separation
-  const copyRequestCode = async (code: string) => {
-    // Explicitly copy ONLY the code string
+  // ✅ FIX: Robust Copy for Telegram WebView
+  const safeCopy = async (text: string, label: string) => {
     try {
-      await navigator.clipboard.writeText(code);
-      toast({ title: t('toast.copied'), description: `Code: ${code}` });
+      await navigator.clipboard.writeText(text);
+      toast({ title: t('toast.copied'), description: `${label}: ${text}` });
     } catch (e) {
-      // Fallback for older browsers or Telegram WebView issues
+      // Fallback for when navigator.clipboard fails
       const textArea = document.createElement("textarea");
-      textArea.value = code;
+      textArea.value = text;
       document.body.appendChild(textArea);
       textArea.select();
       document.execCommand("copy");
       document.body.removeChild(textArea);
-      toast({ title: t('toast.copied') });
+      toast({ title: t('toast.copied'), description: `${label} (Fallback)` });
     }
-  };
-
-  const copyRequestLink = async (r: RechargeRequest) => {
-    const url = `${window.location.origin}/request/${r.requestCode}`;
-    await navigator.clipboard.writeText(url);
-    toast({ title: "Lien copié" });
   };
 
   const shareRequest = async (r: RechargeRequest) => {
     const url = `${window.location.origin}/request/${r.requestCode}`;
-    if (navigator.share) try { await navigator.share({ title: 'Recharge', text: `Demande de recharge: ${url}`, url }); } catch (e) {}
+    if (navigator.share) try { await navigator.share({ title: 'Recharge', text: url }); } catch (e) {}
     else window.open(`https://wa.me/?text=${encodeURIComponent(url)}`, '_blank');
   };
 
@@ -260,7 +246,6 @@ export default function Requests() {
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Details */}
           <div className="grid gap-3">
             <div className="flex items-center gap-2">
               <Phone className="h-4 w-4 text-muted-foreground" />
@@ -274,7 +259,6 @@ export default function Requests() {
             {request.message && <div className="rounded-md bg-muted p-3"><p className="text-sm whitespace-pre-wrap">{request.message}</p></div>}
           </div>
 
-          {/* Recipient Actions (Pay/Reject) */}
           {showActions && request.status === 'pending' && (
             <div className="flex gap-2">
               <Button onClick={() => setLocation(`/request/${request.requestCode}`)} disabled={isLoadingAction} className="flex-1 bg-green-600 hover:bg-green-700">
@@ -286,14 +270,13 @@ export default function Requests() {
             </div>
           )}
 
-          {/* Sender Actions (Copy/Share) */}
           {showShareButtons && request.status === 'pending' && (
             <div className="grid grid-cols-2 gap-2 pt-4 border-t">
-              {/* ✅ Explicit Buttons for Code vs Link */}
-              <Button size="sm" variant="outline" onClick={() => copyRequestCode(request.requestCode || '')}>
+              {/* ✅ DISTINCT BUTTONS: CODE vs LINK */}
+              <Button size="sm" variant="outline" onClick={() => safeCopy(request.requestCode || '', 'Code')}>
                 <Copy className="mr-2 h-4 w-4" /> Code
               </Button>
-              <Button size="sm" variant="outline" onClick={() => copyRequestLink(request)}>
+              <Button size="sm" variant="outline" onClick={() => safeCopy(`${window.location.origin}/request/${request.requestCode}`, 'Lien')}>
                 <LinkIcon className="mr-2 h-4 w-4" /> Lien
               </Button>
               
@@ -353,6 +336,15 @@ export default function Requests() {
            <div className="text-center py-12 text-muted-foreground">Aucune demande envoyée</div>}
         </TabsContent>
       </Tabs>
+
+      {confirmDialog && (
+        <AlertDialog open={confirmDialog.open} onOpenChange={(open) => !open && setConfirmDialog(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader><AlertDialogTitle>{confirmDialog.title}</AlertDialogTitle><AlertDialogDescription>{confirmDialog.description}</AlertDialogDescription></AlertDialogHeader>
+            <AlertDialogFooter><AlertDialogCancel>Annuler</AlertDialogCancel><AlertDialogAction onClick={confirmDialog.onConfirm} className={confirmDialog.variant === 'destructive' ? 'bg-destructive hover:bg-destructive/90' : ''}>{confirmDialog.actionLabel}</AlertDialogAction></AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }

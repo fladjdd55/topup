@@ -24,34 +24,33 @@ export function RechargeForm({
   const [amount, setAmount] = useState(defaultAmount);
   const [error, setError] = useState('');
   
-  // ✅ NEW: Detection State
+  // ✅ FIX: Detection State (This was missing)
   const [validationState, setValidationState] = useState<any>(null);
   const [isValidating, setIsValidating] = useState(false);
 
-  // Sync defaults
+  // Sync defaults and trigger validation immediately
   useEffect(() => {
     if (defaultPhone) {
       setPhone(defaultPhone);
-      // Trigger validation immediately for defaults
       const res = validatePhoneNumber(defaultPhone, 'HT');
       setValidationState(res);
     }
     if (defaultAmount) setAmount(defaultAmount);
   }, [defaultPhone, defaultAmount]);
 
-  // ✅ REAL-TIME DETECTION LOGIC
+  // ✅ FIX: Real-time detection loop
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (phone.length >= 8) { // Only check if enough digits
+      if (phone.length >= 8) { 
         setIsValidating(true);
         const res = validatePhoneNumber(phone, 'HT');
         setValidationState(res);
         setIsValidating(false);
-        setError(''); // Clear errors if valid
+        setError(''); 
       } else {
         setValidationState(null);
       }
-    }, 500); // 500ms delay to avoid flickering while typing
+    }, 500); 
 
     return () => clearTimeout(timer);
   }, [phone]);
@@ -60,7 +59,6 @@ export function RechargeForm({
     e.preventDefault();
     setError('');
 
-    // Final Validation
     const validation = validatePhoneNumber(phone, 'HT');
     if (!validation.isValid) {
       setError(validation.error || 'Numéro de téléphone invalide');
